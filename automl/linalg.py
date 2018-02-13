@@ -54,7 +54,7 @@ def regularized_pca(a, threshold=0.03):
 
 
 def impute(A, a, known_indices, threshold=0.03):
-    """Imputes the missing entries of a given a fully observed matrix A of which a forms a new row.
+    """Imputes the missing entries of a vector a, given a fully observed matrix A of which a forms a new row.
 
     Args:
         A (np.ndarray): Fully observed matrix.
