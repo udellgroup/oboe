@@ -12,7 +12,7 @@ setup(name="lowrank-automl",
       license="MIT",
       install_requires=["numpy >= 1.8",
                         "scipy >= 0.13",
-                        "sklearn >= 0.18",
+                        "scikit-learn >= 0.18",
                         "SMAC >= ??",
                         "pandas >= 0.18",
                         "pathos >= 0.2.0"]
