@@ -21,24 +21,20 @@ def error(y_observed, y_predicted, p_type):
     Returns:
         float: Error metric.
     """
-
     assert p_type in ['classification', 'regression'], "Please specify a valid type."
 
     if p_type == 'classification':
         errors = []
         epsilon = 1e-15
-
         for i in np.unique(y_observed):
             pp = y_predicted == i
             pn = np.invert(pp)
             tp = pp & (y_observed == i)
             tn = pn & (y_observed != i)
             errors.append(0.5 * tp.sum()/np.max(pp.sum(), epsilon) + tn.sum()/np.max(pn.sum(), epsilon))
-
         return np.mean(errors)
 
     elif p_type == 'regression':
-
         return mean_squared_error(y_observed, y_predicted)
 
 
@@ -50,9 +46,8 @@ def invalid_args(func, arglist):
         arglist (list): Proposed arguments
 
     Returns:
-        set: Set of arguments in args that are invalid (if any).
+        set: Set of arguments in args that are invalid (returns empty set if there are none).
     """
-
     args = inspect.getfullargspec(func)[0]
     return set(arglist) - set(args)
 
@@ -69,7 +64,6 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults):
     Returns:
         bool: Whether or not the default error matrix can be used.
     """
-
     # check if valid problem type
     assert p_type in ['classification', 'regression'], "Please specify a valid type."
 
@@ -94,4 +88,17 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults):
         assert len(args) == 0, "Unsupported hyperparameter(s) {} for algorithm {}" \
             .format(args, list(hyperparameters.keys())[i])
 
-    # TODO: check if necessary to generate new error matrix
+    # check if it is necessary to generate new error matrix, i.e. are all hyperparameters in default error matrix
+    # TODO: change logic to account for multiple hyperparameters changing at once
+    compatible_columns = []
+    new_columns = []
+    for alg in hyperparameters.keys():
+        for param in hyperparameters[alg].keys():
+            selected_values = hyperparameters[alg][param]
+            default_values = defaults['hyperparameters'][p_type][alg][param]
+            for i, in_default in enumerate(np.in1d(selected_values, default_values)):
+                if in_default:
+                    compatible_columns.append({alg: {param: selected_values[i]}})
+                else:
+                    new_columns.append({alg: {param: selected_values[i]}})
+    return compatible_columns, new_columns

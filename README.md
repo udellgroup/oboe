@@ -30,16 +30,16 @@ hyperparameter tuning in two phases:
 
 ##### Error Matrix Generation
 To make use of similarities across datasets, we construct
-an *error matrix* $E$ that records the performance of various
+an *error matrix* E that records the performance of various
 models (each column corresponds to an algorithm & hyperparameter
 combination) on training datasets (each row corresponds to
 a dataset). 
 
 ##### Low Rank Approximation
 We summarize this error matrix by a low rank approximation
-$E \approx XY$ using PCA.
+E ≈ XY using PCA.
 
-#### Online Phase
+### Online Phase
 
 ##### Performance Sampling & Prediction
 Given a new dataset, we sample the performance of several

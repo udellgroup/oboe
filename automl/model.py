@@ -19,14 +19,16 @@ class Model:
         algorithm (str): Algorithm type (e.g. 'KNN').
         hyperparameters (dict): Hyperparameters (e.g. {'n_neighbors': 5}).
         model (object): A scikit-learn object for the model.
+        fitted (bool): Whether or not the model has been trained.
         verbose (bool): Whether or not to generate print statements when fitting complete.
     """
 
-    def __init__(self, type, algorithm, hyperparameters, verbose=False):
-        self.type = type
+    def __init__(self, p_type, algorithm, hyperparameters, verbose=False):
+        self.p_type = p_type
         self.algorithm = algorithm
         self.hyperparameters = hyperparameters
         self.model = self.instantiate()
+        self.fitted = False
         self.verbose = verbose
 
     def instantiate(self):
@@ -42,21 +44,22 @@ class Model:
         model to be included in the final ensemble.
 
         Args:
-            x_train (np.ndarray): Features of training dataset.
-            y_train (np.ndarray): Labels of training dataset.
+            x_train (np.ndarray): Features of the training dataset.
+            y_train (np.ndarray): Labels of the training dataset.
         """
         self.model.fit(x_train, y_train)
+        self.fitted = True
         if self.verbose:
-            print("{} ({}) complete. Data = {}".format(self.algorithm, self.hyperparameters, x_train.shape))
+            print("{} ({}) complete. Data={}".format(self.algorithm, self.hyperparameters, x_train.shape))
 
     def predict(self, x_test):
         """Predicts labels on a new dataset.
 
         Args:
-            x_test (np.ndarray): Features of test dataset.
+            x_test (np.ndarray): Features of the test dataset.
 
         Returns:
-            np.array: Predicted features of test dataset.
+            np.array: Predicted features of the test dataset.
         """
         return self.model.predict(x_test)
 
@@ -65,13 +68,13 @@ class Model:
         of the error matrix.
 
         Args:
-            x_train (np.ndarray): Features of training dataset.
-            y_train (np.ndarray): Labels of training dataset.
+            x_train (np.ndarray): Features of the training dataset.
+            y_train (np.ndarray): Labels of the training dataset.
             n_folds (int): Number of folds to use for cross validation.
 
         Returns:
             float: Mean of k-fold cross validation error.
-            np.ndarray: Predictions on training dataset from cross validation.
+            np.ndarray: Predictions on the training dataset from cross validation.
         """
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
@@ -106,33 +109,58 @@ class Model:
         Returns:
             float: Error metric
         """
-        return util.error(y_observed, y_predicted, self.type)
+        return util.error(y_observed, y_predicted, self.p_type)
 
 
 class Ensemble(Model):
     """An object representing an ensemble of machine learning models.
 
     Attributes:
-        type (str): Either 'classification' or 'regression'.
+        p_type (str): Either 'classification' or 'regression'.
         algorithm (str): Algorithm type (e.g. 'Logit').
         hyperparameters (dict): Hyperparameters (e.g. {'C': 1.0}).
         model (object): A scikit-learn object for the model.
     """
 
-    def __init__(self, type, algorithm, hyperparameters):
-        super().__init__(type, algorithm, hyperparameters)
+    def __init__(self, p_type, algorithm, hyperparameters):
+        super().__init__(p_type, algorithm, hyperparameters)
         self.base_learners = []
 
-    def predict(self, x_test):
-        """Fits the ensemble model on training data.
+    def add_base_learner(self, model):
+        """Add weak learner to ensemble.
 
         Args:
-            x_test (np.ndarray): Features of test dataset.
+            model (Model): Model object to be added to the ensemble.
+        """
+        self.base_learners.append(model)
+
+    def fit(self, x_train, y_train):
+        """Fit ensemble model on training data.
+
+        Args:
+            x_train (np.ndarray): Features of the training dataset.
+            y_train (np.ndarray): Labels of the training dataset.
+        """
+        assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
+
+        base_learner_predictions = ()
+        for model in self.base_learners:
+            _, y_predicted = model.kfold_fit_validate(x_train, y_train, n_folds=3)
+            base_learner_predictions += (y_predicted, )
+
+        x_tr = np.hstack(base_learner_predictions)
+        self.model.fit(x_tr, y_train)
+        self.fitted = True
+
+    def predict(self, x_test):
+        """Generate predictions of the ensemble model on test data.
+
+        Args:
+            x_test (np.ndarray): Features of the test dataset.
 
         Returns:
-            np.array: Predicted features of test dataset.
+            np.array: Predicted features of the test dataset.
         """
-
         assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
 
         base_learner_predictions = ()
