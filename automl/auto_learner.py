@@ -124,7 +124,7 @@ class AutoLearner:
 
         # Add new row to error matrix at the end (might be incorrect?)
         # self.error_matrix = np.vstack((self.error_matrix, self.new_row))
-        
+
         # TODO: Fit ensemble candidates (?)
         # TODO: Bayesian optimization
         # TODO: Fit base learners, stacked learner
