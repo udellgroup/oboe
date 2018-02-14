@@ -2,11 +2,11 @@
 Parent class for all ML models.
 """
 
-from abc import abstractclassmethod
+import auto_learner
 import numpy as np
-import classification
-import regression
+import util
 from sklearn.model_selection import KFold
+
 
 RANDOM_STATE = 0
 
@@ -17,15 +17,17 @@ class Model:
     Attributes:
         type (str): Either 'classification' or 'regression'.
         algorithm (str): Algorithm type (e.g. 'KNN').
-        hyperparameters (dict): Hyperparameters (e.g. {'k': 5}).
+        hyperparameters (dict): Hyperparameters (e.g. {'n_neighbors': 5}).
         model (object): A scikit-learn object for the model.
+        verbose (bool): Whether or not to generate print statements when fitting complete.
     """
 
-    def __init__(self, type, algorithm, hyperparameters):
+    def __init__(self, type, algorithm, hyperparameters, verbose=False):
         self.type = type
         self.algorithm = algorithm
         self.hyperparameters = hyperparameters
         self.model = self.instantiate()
+        self.verbose = verbose
 
     def instantiate(self):
         """Creates a scikit-learn object of specified algorithm type and with specified hyperparameters.
@@ -33,7 +35,7 @@ class Model:
         Returns:
             object: A scikit-learn object.
         """
-        return getattr(eval(self.type), self.algorithm)(**self.hyperparameters)
+        return getattr(auto_learner, self.algorithm)(**self.hyperparameters)
 
     def fit(self, x_train, y_train):
         """Fits the model on training data. Note that this function is only used once a model has been identified as a
@@ -44,12 +46,17 @@ class Model:
             y_train (np.ndarray): Labels of training dataset.
         """
         self.model.fit(x_train, y_train)
+        if self.verbose:
+            print("{} ({}) complete. Data = {}".format(self.algorithm, self.hyperparameters, x_train.shape))
 
     def predict(self, x_test):
         """Predicts labels on a new dataset.
 
         Args:
             x_test (np.ndarray): Features of test dataset.
+
+        Returns:
+            np.array: Predicted features of test dataset.
         """
         return self.model.predict(x_test)
 
@@ -83,16 +90,55 @@ class Model:
 
         return cv_errors.mean(), y_predicted
 
-    @abstractclassmethod
-    def error(self, y_predicted, y_observed):
-        """Compute error metric for the model; varies based on classification/regression and algorithm type.
-        This method must be overwritten in the child class.
+    def bayesian_optimize(self):
+        """Conducts Bayesian optimization of hyperparameters.
+        """
+        # TODO: implement Bayesian optimization
+        pass
+
+    def error(self, y_observed, y_predicted):
+        """Compute error metric for the model.
 
         Args:
-            y_predicted (np.ndarray): Predicted labels.
             y_observed (np.ndarray): Observed labels.
+            y_predicted (np.ndarray): Predicted labels.
 
         Returns:
-            float: Error metric.
+            float: Error metric
         """
-        pass
+        return util.error(y_observed, y_predicted, self.type)
+
+
+class Ensemble(Model):
+    """An object representing an ensemble of machine learning models.
+
+    Attributes:
+        type (str): Either 'classification' or 'regression'.
+        algorithm (str): Algorithm type (e.g. 'Logit').
+        hyperparameters (dict): Hyperparameters (e.g. {'C': 1.0}).
+        model (object): A scikit-learn object for the model.
+    """
+
+    def __init__(self, type, algorithm, hyperparameters):
+        super().__init__(type, algorithm, hyperparameters)
+        self.base_learners = []
+
+    def predict(self, x_test):
+        """Fits the ensemble model on training data.
+
+        Args:
+            x_test (np.ndarray): Features of test dataset.
+
+        Returns:
+            np.array: Predicted features of test dataset.
+        """
+
+        assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
+
+        base_learner_predictions = ()
+        for model in self.base_learners:
+            y_predicted = np.reshape(model.predict(x_test), [-1, 1])
+            base_learner_predictions += (y_predicted, )
+
+        x_te = np.hstack(base_learner_predictions)
+        return self.model.predict(x_te)
