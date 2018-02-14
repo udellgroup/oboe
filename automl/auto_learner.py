@@ -4,8 +4,8 @@ Automatically tuned scikit-learn model.
 
 import numpy as np
 import multiprocessing as mp
-import model
 from model import Model, Ensemble
+from pathos.multiprocessing import ProcessingPool as Pool
 import linalg
 import pandas as pd
 import subprocess
@@ -112,11 +112,10 @@ class AutoLearner:
         pool1 = mp.Pool(self.n_cores)
         sample_models = [Model(self.p_type, list(self.column_headings[i].keys())[0],
                          list(self.column_headings[i].values())[0]) for i in known_indices]
-        sample_model_errors = [pool1.apply_async(model.kfold_fit_validate, args=[m, x_train, y_train, 5])
+        sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5])
                                for m in sample_models]
         pool1.close()
         pool1.join()
-
         for i, error in sample_model_errors:
             self.new_row[:, known_indices[i]] = error.get()[0]
             # TODO: add predictions to second layer matrix?
@@ -126,8 +125,23 @@ class AutoLearner:
         # self.error_matrix = np.vstack((self.error_matrix, self.new_row))
 
         # TODO: Fit ensemble candidates (?)
-        # TODO: Bayesian optimization
-        # TODO: Fit base learners, stacked learner
+
+        if self.verbose:
+            print('Conducting Bayesian optimization...')
+        n_models = 3
+        pool2 = Pool(self.n_cores)
+        bayesian_opt_models = [Model(self.p_type, list(self.column_headings[i].keys())[0],
+                               list(self.column_headings[i].values())[0]) for i in np.argsort(self.new_row)[:n_models]]
+        optimized_models = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
+        pool2.close()
+        pool2.join()
+        for m in optimized_models:
+            self.model.add_base_learner(m)
+
+        if self.verbose:
+            print('Fitting optimized ensemble...')
+        self.model.fit(x_train, y_train)
+        self.model.fitted = True
 
     def refit(self, x_train, y_train):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
