@@ -4,3 +4,4 @@ build
 *.txt
 *PKG-INFO
 *.egg
+examples/.ipynb_checkpoints/
