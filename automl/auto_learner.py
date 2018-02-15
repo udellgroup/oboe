@@ -94,7 +94,7 @@ class AutoLearner:
             column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
             selected_indices = np.array([heading in column_headings for heading in column_headings])
             self.error_matrix = default_error_matrix.values[:, selected_indices]
-            self.column_headings = sorted(default, key=lambda d: next(iter(d)))
+            self.column_headings = sorted(default, key=lambda d: d['algorithm'])
 
         self.model = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
         self.new_row = None
@@ -114,8 +114,8 @@ class AutoLearner:
 
         print('Sampling {} entries of new row...'.format(len(known_indices)))
         pool1 = mp.Pool(self.n_cores)
-        sample_models = [Model(self.p_type, next(iter(self.column_headings[i])),
-                               next(iter(self.column_headings[i].values())), verbose=self.verbose)
+        sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
+                               self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                          for i in known_indices]
         sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5])
                                for m in sample_models]
@@ -135,8 +135,8 @@ class AutoLearner:
             print('\nConducting Bayesian optimization...')
         n_models = 3
         pool2 = Pool(self.n_cores)
-        bayesian_opt_models = [Model(self.p_type, next(iter(self.column_headings[i])),
-                                     next(iter(self.column_headings[i].values())))
+        bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
+                                     self.column_headings[i]['hyperparameters'])
                                for i in np.argsort(self.new_row.flatten())[:n_models]]
         optimized_models = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
         pool2.close()

@@ -95,7 +95,7 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults):
     default_settings = generate_headings(defaults['algorithms'][p_type].keys(), defaults['hyperparameters'][p_type])
     for alg in hyperparameters.keys():
         for values in itertools.product(*hyperparameters[alg].values()):
-            setting = {alg: dict(zip(hyperparameters[alg].keys(), list(values)))}
+            setting = {'algorithm': alg, 'hyperparameters': dict(zip(hyperparameters[alg].keys(), list(values)))}
             if setting in default_settings:
                 compatible_columns.append(setting)
             else:
@@ -115,12 +115,14 @@ def generate_headings(algorithms, hyperparameters):
 
     Returns:
         list: List of nested dictionaries, one entry for each model setting.
-              (e.g. [{'KNN': {'n_neighbors': 1, 'p': 1}, {'KNN': {'n_neighbors': 1, 'p': 2}}])
+              (e.g. [{'algorithm': 'KNN', 'hyperparameters': {'n_neighbors': 1, 'p': 1}},
+                     {'algorithm': 'lSVM', 'hyperparameters': {'C': 1.0}}])
     """
     headings = []
     for alg in algorithms:
         hyperparams = hyperparameters[alg]
         for values in itertools.product(*hyperparams.values()):
             settings = dict(zip(hyperparams.keys(), list(values)))
-            headings.append({alg: settings})
+            headings.append({'algorithm': alg, 'hyperparameters': settings})
+    headings = sorted(headings, key=lambda k: k['algorithm'])
     return headings
