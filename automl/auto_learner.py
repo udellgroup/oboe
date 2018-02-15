@@ -7,8 +7,8 @@ import multiprocessing as mp
 import pandas as pd
 import pkg_resources
 import subprocess
-from . import linalg, util
-from .model import Model, Ensemble
+import linalg, util
+from model import Model, Ensemble
 from pathos.multiprocessing import ProcessingPool as Pool
 
 # Classification algorithms
