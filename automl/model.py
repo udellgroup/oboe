@@ -100,7 +100,7 @@ class Model:
         """Conducts Bayesian optimization of hyperparameters.
         """
         # TODO: implement Bayesian optimization
-        pass
+        return self.model
 
     def error(self, y_observed, y_predicted):
         """Compute error metric for the model.
@@ -149,7 +149,8 @@ class Ensemble(Model):
         base_learner_predictions = ()
         for model in self.base_learners:
             _, y_predicted = model.kfold_fit_validate(x_train, y_train, n_folds=3)
-            base_learner_predictions += (y_predicted, )
+            base_learner_predictions += (np.reshape(y_predicted, [-1, 1]), )
+            model.fit(x_train, y_train)
 
         x_tr = np.hstack(base_learner_predictions)
         self.model.fit(x_tr, y_train)

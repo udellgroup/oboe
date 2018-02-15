@@ -4,12 +4,13 @@ Automatically tuned scikit-learn model.
 
 import numpy as np
 import multiprocessing as mp
-from model import Model, Ensemble
-from pathos.multiprocessing import ProcessingPool as Pool
 import linalg
 import pandas as pd
+import pkg_resources
 import subprocess
 import util
+from model import Model, Ensemble
+from pathos.multiprocessing import ProcessingPool as Pool
 
 # Classification algorithms
 from sklearn.neighbors import KNeighborsClassifier as KNN
@@ -39,7 +40,7 @@ REGRESSION = dict(zip(REG, list(map(lambda name: eval(name), REG))))
 HYPERPARAMETERS_C = {'KNN':        {'n_neighbors':       np.arange(1, 15, 2, dtype=int)},
                      'DT':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
                      'RF':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
-                     'GBT':        {'learning_rate':     np.geomspace(0.01, 0.001, 3)},
+                     'GBT':        {'learning_rate':     np.geomspace(0.1, 0.001, 3)},
                      'AB':         {'n_estimators':      np.array([50, 100]),
                                     'learning_rate':     np.array([1.0, 2.0])},
                      'lSVM':       {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
@@ -70,8 +71,8 @@ class AutoLearner:
                  stacking_alg='Logit', **stacking_hyperparams):
 
         # check if arguments to constructor are valid; set to defaults if not specified
-        old, new = util.check_arguments(p_type, algorithms, hyperparameters, DEFAULTS)
-        self.p_type = p_type
+        default, new = util.check_arguments(p_type, algorithms, hyperparameters, DEFAULTS)
+        self.p_type = p_type.lower()
         self.algorithms = algorithms
         self.hyperparameters = hyperparameters
         self.n_cores = n_cores
@@ -88,10 +89,12 @@ class AutoLearner:
                 return
         else:
             # use default error matrix (or subset of)
-            default_error_matrix = pd.read_csv('./defaults/error_matrix.csv', index_col=0)
+            path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
+            default_error_matrix = pd.read_csv(path, index_col=0)
             column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
-            self.error_matrix = default_error_matrix.values[:, np.in1d(old, column_headings)]
-            self.column_headings = sorted(old, key=lambda d: list(d.keys())[0])
+            selected_indices = np.array([heading in column_headings for heading in column_headings])
+            self.error_matrix = default_error_matrix.values[:, selected_indices]
+            self.column_headings = sorted(default, key=lambda d: next(iter(d)))
 
         self.model = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
         self.new_row = None
@@ -105,18 +108,20 @@ class AutoLearner:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
         """
-        self.new_row = np.zeros((1, x_train.shape[1]))
+        print('Data={}'.format(x_train.shape))
+        self.new_row = np.zeros((1, self.error_matrix.shape[1]))
         known_indices = linalg.pivot_columns(self.error_matrix)
 
         print('Sampling {} entries of new row...'.format(len(known_indices)))
         pool1 = mp.Pool(self.n_cores)
-        sample_models = [Model(self.p_type, list(self.column_headings[i].keys())[0],
-                         list(self.column_headings[i].values())[0]) for i in known_indices]
+        sample_models = [Model(self.p_type, next(iter(self.column_headings[i])),
+                               next(iter(self.column_headings[i].values())), verbose=self.verbose)
+                         for i in known_indices]
         sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5])
                                for m in sample_models]
         pool1.close()
         pool1.join()
-        for i, error in sample_model_errors:
+        for i, error in enumerate(sample_model_errors):
             self.new_row[:, known_indices[i]] = error.get()[0]
             # TODO: add predictions to second layer matrix?
         self.new_row = linalg.impute(self.error_matrix, self.new_row, known_indices)
@@ -127,21 +132,26 @@ class AutoLearner:
         # TODO: Fit ensemble candidates (?)
 
         if self.verbose:
-            print('Conducting Bayesian optimization...')
+            print('\nConducting Bayesian optimization...')
         n_models = 3
         pool2 = Pool(self.n_cores)
-        bayesian_opt_models = [Model(self.p_type, list(self.column_headings[i].keys())[0],
-                               list(self.column_headings[i].values())[0]) for i in np.argsort(self.new_row)[:n_models]]
+        bayesian_opt_models = [Model(self.p_type, next(iter(self.column_headings[i])),
+                                     next(iter(self.column_headings[i].values())))
+                               for i in np.argsort(self.new_row.flatten())[:n_models]]
         optimized_models = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
         pool2.close()
         pool2.join()
-        for m in optimized_models:
-            self.model.add_base_learner(m)
+        for i, m in enumerate(optimized_models):
+            bayesian_opt_models[i].model = m
+            self.model.add_base_learner(bayesian_opt_models[i])
 
         if self.verbose:
-            print('Fitting optimized ensemble...')
+            print('\nFitting optimized ensemble...')
         self.model.fit(x_train, y_train)
         self.model.fitted = True
+
+        if self.verbose:
+            print('\nAutoLearner fitting complete.')
 
     def refit(self, x_train, y_train):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
