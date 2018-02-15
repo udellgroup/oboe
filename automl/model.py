@@ -3,7 +3,7 @@ Parent class for all ML models.
 """
 
 import numpy as np
-import auto_learner, util
+import util
 from sklearn.model_selection import KFold
 
 
@@ -36,7 +36,7 @@ class Model:
         Returns:
             object: A scikit-learn object.
         """
-        return getattr(auto_learner, self.algorithm)(**self.hyperparameters)
+        return getattr(util, self.algorithm)(**self.hyperparameters)
 
     def fit(self, x_train, y_train):
         """Fits the model on training data. Note that this function is only used once a model has been identified as a

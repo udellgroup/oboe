@@ -7,51 +7,10 @@ import multiprocessing as mp
 import pandas as pd
 import pkg_resources
 import subprocess
-import linalg, util
+import linalg
+import util
 from model import Model, Ensemble
 from pathos.multiprocessing import ProcessingPool as Pool
-
-# Classification algorithms
-from sklearn.neighbors import KNeighborsClassifier as KNN
-from sklearn.tree import DecisionTreeClassifier as DT
-from sklearn.ensemble import RandomForestClassifier as RF
-from sklearn.ensemble import GradientBoostingClassifier as GBT
-from sklearn.ensemble import AdaBoostClassifier as AB
-from sklearn.svm import LinearSVC as lSVM
-from sklearn.svm import SVC as kSVM
-from sklearn.linear_model import LogisticRegression as Logit
-from sklearn.linear_model import Perceptron
-from sklearn.naive_bayes import GaussianNB as GNB
-
-# Regression algorithms
-from sklearn.linear_model import Lasso
-from sklearn.linear_model import Ridge
-from sklearn.linear_model import ElasticNet
-# TODO: include more regression algorithms
-
-
-CLS = ['KNN', 'DT', 'RF', 'GBT', 'AB', 'lSVM', 'kSVM', 'Logit', 'Perceptron', 'GNB']
-REG = ['Lasso', 'Ridge', 'ElasticNet']
-
-CLASSIFICATION = dict(zip(CLS, list(map(lambda name: eval(name), CLS))))
-REGRESSION = dict(zip(REG, list(map(lambda name: eval(name), REG))))
-
-HYPERPARAMETERS_C = {'KNN':        {'n_neighbors':       np.arange(1, 15, 2, dtype=int)},
-                     'DT':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
-                     'RF':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
-                     'GBT':        {'learning_rate':     np.geomspace(0.1, 0.001, 3)},
-                     'AB':         {'n_estimators':      np.array([50, 100]),
-                                    'learning_rate':     np.array([1.0, 2.0])},
-                     'lSVM':       {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
-                     'kSVM':       {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
-                     'Logit':      {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
-                     'Perceptron': {},
-                     'GNB':        {}
-                     }
-HYPERPARAMETERS_R = {}
-
-DEFAULTS = {'algorithms':      {'classification': CLASSIFICATION,    'regression': REGRESSION},
-            'hyperparameters': {'classification': HYPERPARAMETERS_C, 'regression': HYPERPARAMETERS_R}}
 
 
 class AutoLearner:
@@ -70,7 +29,7 @@ class AutoLearner:
                  stacking_alg='Logit', **stacking_hyperparams):
 
         # check if arguments to constructor are valid; set to defaults if not specified
-        default, new = util.check_arguments(p_type, algorithms, hyperparameters, DEFAULTS)
+        default, new = util.check_arguments(p_type, algorithms, hyperparameters)
         self.p_type = p_type.lower()
         self.algorithms = algorithms
         self.hyperparameters = hyperparameters
