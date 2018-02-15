@@ -50,7 +50,7 @@ class Model:
         self.model.fit(x_train, y_train)
         self.fitted = True
         if self.verbose:
-            print("{} ({}) complete. Data={}".format(self.algorithm, self.hyperparameters, x_train.shape))
+            print("{} ({}) complete.".format(self.algorithm, self.hyperparameters))
 
     def predict(self, x_test):
         """Predicts labels on a new dataset.
@@ -90,6 +90,9 @@ class Model:
             model.fit(x_tr, y_tr)
             y_predicted[test_idx] = model.predict(x_te)
             cv_errors[i] = self.error(y_predicted[test_idx], y_te)
+
+        if self.verbose:
+            print("{} ({}) complete.".format(self.algorithm, self.hyperparameters))
 
         return cv_errors.mean(), y_predicted
 
