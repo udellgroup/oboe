@@ -4,6 +4,7 @@ Miscellaneous helper functions.
 
 import numpy as np
 import inspect
+import itertools
 from sklearn.metrics import mean_squared_error
 
 
@@ -77,7 +78,7 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults):
         "Unsupported algorithm(s) {}.".format(set(algorithms) - set(all_algs))
 
     # set selected hyperparameters to default set if not specified
-    all_hyp = list(defaults['hyperparameters'][p_type])
+    all_hyp = defaults['hyperparameters'][p_type]
     if hyperparameters is None:
         hyperparameters = all_hyp
 
@@ -102,3 +103,26 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults):
                 else:
                     new_columns.append({alg: {param: selected_values[i]}})
     return compatible_columns, new_columns
+
+
+def generate_headings(algorithms, hyperparameters):
+    """Generate column headings of error matrix.
+
+    Args:
+        algorithms (list): A list of algorithms in strings (e.g. ['KNN', 'RF', 'lSVM'])
+        hyperparameters (dict): A nested dictionary of hyperparameters. First key is algorithm type (str), second key
+        is hyperparameter name (str); argument to pass to scikit-learn constructor with array of values
+        (e.g. {'KNN': {'n_neighbors': np.array([1, 3, 5, 7]),
+                       'p': np.array([1, 2])}}).
+
+    Returns:
+        list: List of nested dictionaries, one entry for each model setting.
+              (e.g. [{'KNN': {'n_neighbors': 1, 'p': 1}, {'KNN': {'n_neighbors': 1, 'p': 2}}])
+    """
+    headings = []
+    for alg in algorithms:
+        hyperparams = hyperparameters[alg]
+        for element in itertools.product(*hyperparams.values()):
+            settings = dict(zip(hyperparams.keys(), element))
+            headings.append({alg: settings})
+    return headings
