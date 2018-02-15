@@ -23,7 +23,7 @@ class Model:
         verbose (bool): Whether or not to generate print statements when fitting complete.
     """
 
-    def __init__(self, p_type, algorithm, hyperparameters, verbose=False):
+    def __init__(self, p_type, algorithm, hyperparameters={}, verbose=False):
         self.p_type = p_type
         self.algorithm = algorithm
         self.hyperparameters = hyperparameters
@@ -122,7 +122,7 @@ class Ensemble(Model):
         model (object): A scikit-learn object for the model.
     """
 
-    def __init__(self, p_type, algorithm, hyperparameters):
+    def __init__(self, p_type, algorithm, hyperparameters={}):
         super().__init__(p_type, algorithm, hyperparameters)
         self.base_learners = []
 
