@@ -30,7 +30,8 @@ def pivot_columns(a):
     Returns:
         np.array: The permutation p.
     """
-    return qr(a, pivoting=True)[2]
+    rank = approx_rank(a)
+    return qr(a, pivoting=True)[2][:rank]
 
 
 def regularized_pca(a, threshold=0.03):
