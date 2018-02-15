@@ -32,7 +32,7 @@ def error(y_observed, y_predicted, p_type):
             pn = np.invert(pp)
             tp = pp & (y_observed == i)
             tn = pn & (y_observed != i)
-            errors.append(0.5 * tp.sum()/np.max(pp.sum(), epsilon) + tn.sum()/np.max(pn.sum(), epsilon))
+            errors.append(0.5 * tp.sum()/np.maximum(pp.sum(), epsilon) + tn.sum()/np.maximum(pn.sum(), epsilon))
         return np.mean(errors)
 
     elif p_type == 'regression':
