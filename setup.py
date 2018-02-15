@@ -13,7 +13,6 @@ setup(name="lowrank-automl",
       install_requires=["numpy >= 1.8",
                         "scipy >= 0.13",
                         "scikit-learn >= 0.18",
-                        "SMAC >= ??",
                         "pandas >= 0.18",
                         "pathos >= 0.2.0"]
       )
