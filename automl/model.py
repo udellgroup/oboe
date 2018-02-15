@@ -2,9 +2,8 @@
 Parent class for all ML models.
 """
 
-import auto_learner
 import numpy as np
-import util
+from . import auto_learner, util
 from sklearn.model_selection import KFold
 
 

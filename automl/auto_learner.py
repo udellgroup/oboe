@@ -4,12 +4,11 @@ Automatically tuned scikit-learn model.
 
 import numpy as np
 import multiprocessing as mp
-import linalg
 import pandas as pd
 import pkg_resources
 import subprocess
-import util
-from model import Model, Ensemble
+from . import linalg, util
+from .model import Model, Ensemble
 from pathos.multiprocessing import ProcessingPool as Pool
 
 # Classification algorithms
