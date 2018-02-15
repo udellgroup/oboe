@@ -94,7 +94,7 @@ class Model:
         if self.verbose:
             print("{} ({}) complete.".format(self.algorithm, self.hyperparameters))
 
-        return cv_errors.mean(), y_predicted
+        return cv_errors, y_predicted
 
     def bayesian_optimize(self):
         """Conducts Bayesian optimization of hyperparameters.

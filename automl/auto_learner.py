@@ -122,7 +122,7 @@ class AutoLearner:
         pool1.close()
         pool1.join()
         for i, error in enumerate(sample_model_errors):
-            self.new_row[:, known_indices[i]] = error.get()[0]
+            self.new_row[:, known_indices[i]] = error.get()[0].mean()
             # TODO: add predictions to second layer matrix?
         self.new_row = linalg.impute(self.error_matrix, self.new_row, known_indices)
 
@@ -136,7 +136,7 @@ class AutoLearner:
         n_models = 3
         pool2 = Pool(self.n_cores)
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
-                                     self.column_headings[i]['hyperparameters'])
+                                     self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                                for i in np.argsort(self.new_row.flatten())[:n_models]]
         optimized_models = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
         pool2.close()

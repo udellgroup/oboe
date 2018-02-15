@@ -28,11 +28,11 @@ def error(y_observed, y_predicted, p_type):
         errors = []
         epsilon = 1e-15
         for i in np.unique(y_observed):
-            pp = y_predicted == i
-            pn = np.invert(pp)
-            tp = pp & (y_observed == i)
-            tn = pn & (y_observed != i)
-            errors.append(0.5 * tp.sum()/np.maximum(pp.sum(), epsilon) + tn.sum()/np.maximum(pn.sum(), epsilon))
+            tp = ((y_observed == i) & (y_predicted == i)).sum()
+            tn = ((y_observed != i) & (y_predicted != i)).sum()
+            fp = ((y_observed != i) & (y_predicted == i)).sum()
+            fn = ((y_observed == i) & (y_predicted != i)).sum()
+            errors.append(1 - 0.5*(tp / np.maximum(tp + fn, epsilon)) - 0.5*(tn / np.maximum(tn + fp, epsilon)))
         return np.mean(errors)
 
     elif p_type == 'regression':
