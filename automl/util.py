@@ -66,7 +66,7 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults):
         bool: Whether or not the default error matrix can be used.
     """
     # check if valid problem type
-    assert p_type in ['classification', 'regression'], "Please specify a valid type."
+    assert p_type.lower() in ['classification', 'regression'], "Please specify a valid type."
 
     # set selected algorithms to default set if not specified
     all_algs = list(defaults['algorithms'][p_type].keys())
@@ -90,18 +90,16 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults):
             .format(args, list(hyperparameters.keys())[i])
 
     # check if it is necessary to generate new error matrix, i.e. are all hyperparameters in default error matrix
-    # TODO: change logic to account for multiple hyperparameters changing at once
     compatible_columns = []
     new_columns = []
+    default_settings = generate_headings(defaults['algorithms'][p_type].keys(), defaults['hyperparameters'][p_type])
     for alg in hyperparameters.keys():
-        for param in hyperparameters[alg].keys():
-            selected_values = hyperparameters[alg][param]
-            default_values = defaults['hyperparameters'][p_type][alg][param]
-            for i, in_default in enumerate(np.in1d(selected_values, default_values)):
-                if in_default:
-                    compatible_columns.append({alg: {param: selected_values[i]}})
-                else:
-                    new_columns.append({alg: {param: selected_values[i]}})
+        for values in itertools.product(*hyperparameters[alg].values()):
+            setting = {alg: dict(zip(hyperparameters[alg].keys(), list(values)))}
+            if setting in default_settings:
+                compatible_columns.append(setting)
+            else:
+                new_columns.append(setting)
     return compatible_columns, new_columns
 
 
@@ -122,7 +120,7 @@ def generate_headings(algorithms, hyperparameters):
     headings = []
     for alg in algorithms:
         hyperparams = hyperparameters[alg]
-        for element in itertools.product(*hyperparams.values()):
-            settings = dict(zip(hyperparams.keys(), element))
+        for values in itertools.product(*hyperparams.values()):
+            settings = dict(zip(hyperparams.keys(), list(values)))
             headings.append({alg: settings})
     return headings
