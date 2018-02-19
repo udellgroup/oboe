@@ -171,7 +171,7 @@ def generate_settings(algorithms, hyperparameters):
             for key, val in configs.items():
                 if isinstance(val, (int, float)):
                     if isclose(val, round(val)):
-                        configs[key] = int(val)
+                        configs[key] = int(round(val))
             settings.append({'algorithm': alg, 'hyperparameters': configs})
     settings = sorted(settings, key=lambda k: k['algorithm'])
     return settings
