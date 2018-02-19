@@ -34,15 +34,14 @@ def pivot_columns(a):
     return qr(a, pivoting=True)[2][:rank]
 
 
-def regularized_pca(a, threshold=0.03):
-    """Solves the quadratically regularized PCA problem; minimize ||A_XY||^2 + a||X||^2 + b||Y||^2, where ||.|| is the
-    Frobenius norm.
+def pca(a, threshold=0.03):
+    """Solves: minimize ||A_XY||^2 where ||.|| is the Frobenius norm.
 
     Args:
-        a (np.ndarray): Matrix for which to compute regularized PCA.
+        a (np.ndarray): Matrix for which to compute PCA.
         threshold (float): Threshold specifying approximate rank of a.
     Returns:
-        x, y (np.ndarray): The solutions to the regularized PCA problem.
+        x, y (np.ndarray): The solutions to the PCA problem.
         vt (np.ndarray): Transpose of V as specified in the singular value decomposition.
     """
     rank = approx_rank(a, threshold)
@@ -65,7 +64,7 @@ def impute(A, a, known_indices, threshold=0.03):
     Returns:
         np.ndarray: 1xn imputed array.
     """
-    x, y, _ = regularized_pca(A, threshold=threshold)
+    x, y, _ = pca(A, threshold=threshold)
 
     # find x using matrix division using known portion of a, corresponding columns of A
     x = np.linalg.lstsq(y[:, known_indices].T, a[:, known_indices].T)[0].T
