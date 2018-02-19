@@ -8,7 +8,7 @@ import itertools
 from sklearn.metrics import mean_squared_error
 
 # Classification algorithms
-from sklearn.neighbors import KNeighborsClassifier as kNN
+from sklearn.neighbors import KNeighborsClassifier as KNN
 from sklearn.tree import DecisionTreeClassifier as DT
 from sklearn.ensemble import RandomForestClassifier as RF
 from sklearn.ensemble import ExtraTreesClassifier as ExtraTrees
