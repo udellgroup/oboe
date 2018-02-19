@@ -8,9 +8,10 @@ import itertools
 from sklearn.metrics import mean_squared_error
 
 # Classification algorithms
-from sklearn.neighbors import KNeighborsClassifier as KNN
+from sklearn.neighbors import KNeighborsClassifier as kNN
 from sklearn.tree import DecisionTreeClassifier as DT
 from sklearn.ensemble import RandomForestClassifier as RF
+from sklearn.ensemble import ExtraTreesClassifier as ExtraTrees
 from sklearn.ensemble import GradientBoostingClassifier as GBT
 from sklearn.ensemble import AdaBoostClassifier as AB
 from sklearn.svm import LinearSVC as lSVM
@@ -18,6 +19,7 @@ from sklearn.svm import SVC as kSVM
 from sklearn.linear_model import LogisticRegression as Logit
 from sklearn.linear_model import Perceptron
 from sklearn.naive_bayes import GaussianNB as GNB
+from sklearn.neural_network import MLPClassifier as MLP
 
 # Regression algorithms
 from sklearn.linear_model import Lasso
