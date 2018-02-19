@@ -61,7 +61,12 @@ def main(args):
     for i, setting in enumerate(settings):
         model = Model(args.p_type, setting['algorithm'], setting['hyperparameters'], args.verbose)
         start = time.time()
-        cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
+        try:
+            cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
+        except ValueError as e:
+            with open(os.path.join(args.save_dir, 'log.txt'), 'a') as log:
+                line = '\nID={}, model={}, {}'.format(dataset_id, setting, e)
+                log.write(line)
         results[:, i] = np.array([cv_errors.mean(), time.time() - start])
         save_path = os.path.join(args.save_dir, str(dataset_id).zfill(5) + '.csv')
         pd.DataFrame(results, columns=headings, index=['Error', 'Time']).to_csv(save_path)
