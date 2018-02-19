@@ -55,6 +55,7 @@ class AutoLearner:
             self.column_headings = sorted(default, key=lambda d: d['algorithm'])
 
         self.ensemble = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
+        self.optimized_settings = []
         self.new_row = None
 
     def fit(self, x_train, y_train):
@@ -96,12 +97,14 @@ class AutoLearner:
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                      self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                                for i in np.argsort(self.new_row.flatten())[:n_models]]
-        optimized_models = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
+        optimized_hyperparams = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
         pool2.close()
         pool2.join()
-        for i, m in enumerate(optimized_models):
-            bayesian_opt_models[i].model = m
+        for i, params in enumerate(optimized_hyperparams):
+            bayesian_opt_models[i].hyperparameters = params
             self.ensemble.add_base_learner(bayesian_opt_models[i])
+            self.optimized_settings.append({'algorithm': bayesian_opt_models[i].algorithm,
+                                            'hyperparameters': bayesian_opt_models[i].hyperparameters})
 
         if self.verbose:
             print('\nFitting optimized ensemble...')
@@ -129,3 +132,4 @@ class AutoLearner:
             x_test (np.ndarray): Features of the test dataset.
         """
         return self.ensemble.predict(x_test)
+

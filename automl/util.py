@@ -134,7 +134,7 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
     # check if it is necessary to generate new error matrix, i.e. are all hyperparameters in default error matrix
     compatible_columns = []
     new_columns = []
-    default_settings = generate_headings(defaults['algorithms'][p_type].keys(), defaults['hyperparameters'][p_type])
+    default_settings = generate_settings(defaults['algorithms'][p_type].keys(), defaults['hyperparameters'][p_type])
     for alg in hyperparameters.keys():
         for values in itertools.product(*hyperparameters[alg].values()):
             setting = {'algorithm': alg, 'hyperparameters': dict(zip(hyperparameters[alg].keys(), list(values)))}
@@ -145,7 +145,7 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
     return compatible_columns, new_columns
 
 
-def generate_headings(algorithms, hyperparameters):
+def generate_settings(algorithms, hyperparameters):
     """Generate column headings of error matrix.
 
     Args:
@@ -160,11 +160,11 @@ def generate_headings(algorithms, hyperparameters):
               (e.g. [{'algorithm': 'KNN', 'hyperparameters': {'n_neighbors': 1, 'p': 1}},
                      {'algorithm': 'lSVM', 'hyperparameters': {'C': 1.0}}])
     """
-    headings = []
+    settings = []
     for alg in algorithms:
         hyperparams = hyperparameters[alg]
         for values in itertools.product(*hyperparams.values()):
-            settings = dict(zip(hyperparams.keys(), list(values)))
-            headings.append({'algorithm': alg, 'hyperparameters': settings})
-    headings = sorted(headings, key=lambda k: k['algorithm'])
-    return headings
+            configs = dict(zip(hyperparams.keys(), list(values)))
+            settings.append({'algorithm': alg, 'hyperparameters': configs})
+    settings = sorted(settings, key=lambda k: k['algorithm'])
+    return settings

@@ -49,7 +49,7 @@ class Model:
         self.model.fit(x_train, y_train)
         self.fitted = True
         if self.verbose:
-            print("{} ({}) complete.".format(self.algorithm, self.hyperparameters))
+            print("{} {} complete.".format(self.algorithm, self.hyperparameters))
 
     def predict(self, x_test):
         """Predicts labels on a new dataset.
@@ -91,7 +91,7 @@ class Model:
             cv_errors[i] = self.error(y_predicted[test_idx], y_te)
 
         if self.verbose:
-            print("{} ({}) complete.".format(self.algorithm, self.hyperparameters))
+            print("{} {} complete.".format(self.algorithm, self.hyperparameters))
 
         return cv_errors, y_predicted
 
@@ -99,7 +99,7 @@ class Model:
         """Conducts Bayesian optimization of hyperparameters.
         """
         # TODO: implement Bayesian optimization
-        return self.model
+        return self.hyperparameters
 
     def error(self, y_observed, y_predicted):
         """Compute error metric for the model.
