@@ -32,7 +32,7 @@ from model import Model
 
 def main(args):
     # load selected algorithms & hyperparameters from string or JSON file
-    assert args.string != args.file, 'Exactly one of --string and --file must be specified.'
+    assert (args.string is None) != (args.file is None), 'Exactly one of --string and --file must be specified.'
     if args.string:
         configs = json.loads(args.string)
     elif args.file:
@@ -44,13 +44,10 @@ def main(args):
     for alg in configs['algorithms']:
         for key, val in configs['hyperparameters'][alg].items():
             configs['hyperparameters'][alg][key] = np.array(val)
-    
-    # consistency of log file location
-    if args.save_dir.endswith('/'):
-        args.save_dir = args.save_dir[:-1]
 
     # load training dataset
     dataset = pd.read_csv(args.data, header=None).values
+    # TODO: try/except if dataset does not contain number
     dataset_id = int(re.findall("\\d+", args.data.split('/')[-1].split('.')[0])[0])
     t0 = time.time()
     x = dataset[:, :-1]
@@ -73,7 +70,7 @@ def main(args):
     elapsed = time.time() - t0
     line = '\nID={}, Size={}, Time={:.0f}s, Avg. Error={:.3f}'\
            .format(dataset_id, dataset.shape, elapsed, results[0, :].mean())
-    with open(os.path.join(os.path.dirname(args.save_dir), 'log.txt'), 'a') as log:
+    with open(os.path.join(args.save_dir, 'log.txt'), 'a') as log:
         log.write(line)
     print(line)
 
