@@ -46,7 +46,7 @@ def main(args):
             configs['hyperparameters'][alg][key] = np.array(val)
 
     # load training dataset
-    dataset = pd.read_csv(args.data, header=None).values
+    dataset = pd.read_csv(args.data, index_col=0).values
     # TODO: try/except if dataset does not contain number
     dataset_id = int(re.findall("\\d+", args.data.split('/')[-1].split('.')[0])[0])
     t0 = time.time()
