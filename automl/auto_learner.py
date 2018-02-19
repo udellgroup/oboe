@@ -54,7 +54,7 @@ class AutoLearner:
             self.error_matrix = default_error_matrix.values[:, selected_indices]
             self.column_headings = sorted(default, key=lambda d: d['algorithm'])
 
-        self.model = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
+        self.ensemble = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
         self.new_row = None
 
     def fit(self, x_train, y_train):
@@ -101,12 +101,12 @@ class AutoLearner:
         pool2.join()
         for i, m in enumerate(optimized_models):
             bayesian_opt_models[i].model = m
-            self.model.add_base_learner(bayesian_opt_models[i])
+            self.ensemble.add_base_learner(bayesian_opt_models[i])
 
         if self.verbose:
             print('\nFitting optimized ensemble...')
-        self.model.fit(x_train, y_train)
-        self.model.fitted = True
+        self.ensemble.fit(x_train, y_train)
+        self.ensemble.fitted = True
 
         if self.verbose:
             print('\nAutoLearner fitting complete.')
@@ -119,8 +119,8 @@ class AutoLearner:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
         """
-        assert self.model.fitted, "Cannot refit unless model has been fit."
-        self.model.fit(x_train, y_train)
+        assert self.ensemble.fitted, "Cannot refit unless model has been fit."
+        self.ensemble.fit(x_train, y_train)
 
     def predict(self, x_test):
         """Generate predictions on test data.
@@ -128,4 +128,4 @@ class AutoLearner:
         Args:
             x_test (np.ndarray): Features of the test dataset.
         """
-        return self.model.predict(x_test)
+        return self.ensemble.predict(x_test)
