@@ -5,6 +5,7 @@ Miscellaneous helper functions.
 import numpy as np
 import inspect
 import itertools
+from math import isclose
 from sklearn.metrics import mean_squared_error
 
 # Classification algorithms
@@ -167,6 +168,10 @@ def generate_settings(algorithms, hyperparameters):
         hyperparams = hyperparameters[alg]
         for values in itertools.product(*hyperparams.values()):
             configs = dict(zip(hyperparams.keys(), list(values)))
+            for key, val in configs.items():
+                if isinstance(val, (int, float)):
+                    if isclose(val, round(val)):
+                        configs[key] = int(val)
             settings.append({'algorithm': alg, 'hyperparameters': configs})
     settings = sorted(settings, key=lambda k: k['algorithm'])
     return settings
