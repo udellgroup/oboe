@@ -28,7 +28,7 @@ def main(args):
 
     # convert lists of hyperparameters to numpy arrays
     for alg in configs['algorithms']:
-        for key, val in configs['hyperparameters'][alg]:
+        for key, val in configs['hyperparameters'][alg].items():
             configs['hyperparameters'][alg][key] = np.array(val)
 
     # create directories/subdirectories in which to save error matrix files (if necessary)
@@ -37,8 +37,8 @@ def main(args):
         os.makedirs(save_dir)
 
     # load training dataset
-    dataset = pd.read_csv(args.path, header=None).values
-    dataset_id = int(re.findall("\\d+", args.path.split('/')[-1].split('.')[0])[0])
+    dataset = pd.read_csv(args.data, header=None).values
+    dataset_id = int(re.findall("\\d+", args.data.split('/')[-1].split('.')[0])[0])
     t0 = time.time()
     x = dataset[:, :-1]
     y = dataset[:, -1]
@@ -53,12 +53,12 @@ def main(args):
         start = time.time()
         cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
         results[:, i] = np.array([cv_errors.mean(), time.time() - start])
-        save_path = save_dir + str(dataset_id).zfill(5) + '.csv'
+        save_path = os.path.join(save_dir, str(dataset_id).zfill(5) + '.csv')
         pd.DataFrame(results, columns=headings, index=['Error', 'Time']).to_csv(save_path)
 
     # log results
     elapsed = time.time() - t0
-    line = 'ID={}, Size={}, Time={}, Avg. Error = {:.3f}'\
+    line = 'ID={}, Size={}, Time={:.0f}s, Avg. Error = {:.3f}'\
            .format(dataset_id, dataset.shape, elapsed, results[0, :].mean())
     with open(os.path.join(args.save_dir, 'log.txt'), 'w') as log:
         log.write(line)
@@ -83,7 +83,7 @@ def parse_args(argv):
     parser.add_argument('--save_dir', type=str, default='./custom/',
                         help='Directory in which to save new error matrix.')
     parser.add_argument('--n_folds', type=int, default=10, help='Number of folds to use for k-fold cross validation.')
-    parser.add_argument('-verbose', type=bool, default=False,
+    parser.add_argument('--verbose', type=bool, default=False,
                         help='Whether to generate print statements on completion.')
     return parser.parse_args(argv)
 
