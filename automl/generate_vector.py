@@ -4,7 +4,6 @@ algorithm & hyperparameter combination.
 """
 
 import argparse
-import datetime
 import numpy as np
 import pandas as pd
 import json
@@ -31,11 +30,6 @@ def main(args):
         for key, val in configs['hyperparameters'][alg].items():
             configs['hyperparameters'][alg][key] = np.array(val)
 
-    # create directories/subdirectories in which to save error matrix files (if necessary)
-    save_dir = os.path.join(args.save_dir, current_time())
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-
     # load training dataset
     dataset = pd.read_csv(args.data, header=None).values
     dataset_id = int(re.findall("\\d+", args.data.split('/')[-1].split('.')[0])[0])
@@ -53,21 +47,16 @@ def main(args):
         start = time.time()
         cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
         results[:, i] = np.array([cv_errors.mean(), time.time() - start])
-        save_path = os.path.join(save_dir, str(dataset_id).zfill(5) + '.csv')
+        save_path = os.path.join(args.save_dir, str(dataset_id).zfill(5) + '.csv')
         pd.DataFrame(results, columns=headings, index=['Error', 'Time']).to_csv(save_path)
 
     # log results
     elapsed = time.time() - t0
     line = 'ID={}, Size={}, Time={:.0f}s, Avg. Error = {:.3f}'\
            .format(dataset_id, dataset.shape, elapsed, results[0, :].mean())
-    with open(os.path.join(args.save_dir, 'log.txt'), 'w') as log:
+    with open(os.path.join(os.path.dirname(os.path.dirname(args.save_dir)), 'log.txt'), 'w') as log:
         log.write(line)
     print(line)
-
-
-def current_time():
-    date_time = str(datetime.datetime.now())[:16]
-    return re.sub(r'\s|:', '-', date_time)
 
 
 def parse_args(argv):
