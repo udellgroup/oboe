@@ -40,11 +40,6 @@ def main(args):
             configs = json.load(f)
     assert set(configs.keys()) == {'algorithms', 'hyperparameters'}, 'Invalid arguments.'
 
-    # convert lists of hyperparameters to numpy arrays
-    for alg in configs['algorithms']:
-        for key, val in configs['hyperparameters'][alg].items():
-            configs['hyperparameters'][alg][key] = np.array(val)
-
     # load training dataset
     dataset = pd.read_csv(args.data, index_col=0).values
     # TODO: try/except if dataset does not contain number
