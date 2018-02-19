@@ -11,7 +11,5 @@ fi
 
 TIME=`date +%Y%m%d%H%M`
 
-for file in ${DATA_DIR}/*.csv;
-do
-    python generate_vector.py "classification" ${file} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${TIME}/ &
-done
+ls ${DATA_DIR}/*.csv | xargs -i --max-procs=90 bash -c \
+"echo {}; python generate_vector.py "classification" {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${TIME}"
