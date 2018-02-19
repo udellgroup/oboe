@@ -17,7 +17,7 @@ class AutoLearner:
     """An object representing an automatically tuned machine learning model.
 
     Attributes:
-        type (str): Problem type. One of {'classification', 'regression'}.
+        p_type (str): Problem type. One of {'classification', 'regression'}.
         algorithms (list): A list of algorithm types to be considered, in strings. (e.g. ['KNN', 'lSVM', 'kSVM']).
         hyperparameters (dict): A nested dict of hyperparameters to be considered; see above for example.
         n_cores (int): Maximum number of cores over which to parallelize (None means no limit).
