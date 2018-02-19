@@ -55,7 +55,7 @@ def main(args):
 
     settings = util.generate_settings(configs['algorithms'], configs['hyperparameters'])
     headings = [str(s) for s in settings]
-    results = np.zeros((2, len(settings)))
+    results = np.full((2, len(settings)), np.nan)
 
     # generate error matrix entries, i.e. compute k-fold cross validation error
     for i, setting in enumerate(settings):

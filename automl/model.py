@@ -39,7 +39,7 @@ class Model:
         # TODO: is random state necessary (?)
         try:
             return getattr(util, self.algorithm)(random_state=0, **self.hyperparameters)
-        except ValueError:
+        except TypeError:
             return getattr(util, self.algorithm)(**self.hyperparameters)
 
     def fit(self, x_train, y_train):
