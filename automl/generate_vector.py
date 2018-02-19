@@ -44,6 +44,10 @@ def main(args):
     for alg in configs['algorithms']:
         for key, val in configs['hyperparameters'][alg].items():
             configs['hyperparameters'][alg][key] = np.array(val)
+    
+    # consistency of log file location
+    if args.save_dir.endswith('/'):
+        args.save_dir = args.save_dir[:-1]
 
     # load training dataset
     dataset = pd.read_csv(args.data, header=None).values
@@ -67,9 +71,9 @@ def main(args):
 
     # log results
     elapsed = time.time() - t0
-    line = 'ID={}, Size={}, Time={:.0f}s, Avg. Error={:.3f}'\
+    line = '\nID={}, Size={}, Time={:.0f}s, Avg. Error={:.3f}'\
            .format(dataset_id, dataset.shape, elapsed, results[0, :].mean())
-    with open(os.path.join(os.path.dirname(os.path.dirname(args.save_dir)), 'log.txt'), 'w') as log:
+    with open(os.path.join(os.path.dirname(args.save_dir), 'log.txt'), 'a') as log:
         log.write(line)
     print(line)
 
@@ -84,7 +88,7 @@ def parse_args(argv):
     parser.add_argument('--file', type=str,
                         help='JSON file listing all algorithm types and hyperparameters. '
                              'See automl/defaults/models.json for example.')
-    parser.add_argument('--save_dir', type=str, default='./custom/',
+    parser.add_argument('--save_dir', type=str, default='./custom',
                         help='Directory in which to save new error matrix.')
     parser.add_argument('--n_folds', type=int, default=10, help='Number of folds to use for k-fold cross validation.')
     parser.add_argument('--verbose', type=bool, default=False,
