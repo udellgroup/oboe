@@ -32,7 +32,7 @@ REG = ['Lasso', 'Ridge', 'ElasticNet']
 CLASSIFICATION = dict(zip(CLS, list(map(lambda name: eval(name), CLS))))
 REGRESSION = dict(zip(REG, list(map(lambda name: eval(name), REG))))
 
-HYPERPARAMETERS_C = {'KNN':        {'n_neighbors':       np.arange(1, 15, 2, dtype=int)},
+HYPERPARAMETERS_C = {'KNN':        {'n_neighbors':       np.arange(1, 17, 2, dtype=int)},
                      'DT':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
                      'RF':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
                      'GBT':        {'learning_rate':     np.geomspace(0.1, 0.001, 3)},

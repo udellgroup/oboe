@@ -52,7 +52,7 @@ def main(args):
 
     # log results
     elapsed = time.time() - t0
-    line = 'ID={}, Size={}, Time={:.0f}s, Avg. Error = {:.3f}'\
+    line = 'ID={}, Size={}, Time={:.0f}s, Avg. Error={:.3f}'\
            .format(dataset_id, dataset.shape, elapsed, results[0, :].mean())
     with open(os.path.join(os.path.dirname(os.path.dirname(args.save_dir)), 'log.txt'), 'w') as log:
         log.write(line)
