@@ -1,6 +1,21 @@
 """
 Generate a row of the error matrix for a given dataset. Records cross-validation error & elapsed time for each
 algorithm & hyperparameter combination.
+
+Note the difference between model "configurations" and "settings": configurations is a nested dictionary, containing
+a list of algorithms, and a dictionary of lists of hyperparameters; settings is a list of dictionaries, with one
+algorithm and a dictionary of hyperparameters. Below is an example of each:
+
+Config: {'algorithms': ['KNN', 'DT'],
+         'hyperparameters': {'KNN': {'n_neighbors': [1, 3, 5, 7], 'p': [1, 2]},
+                             'DT':  {'min_samples_split': [0.01, 0.001]}
+                            }
+        }
+
+Settings: [{'algorithm': 'KNN', 'hyperparameters': {'n_neighbors': 1, 'p': 1}},
+           {'algorithm': 'KNN', 'hyperparameters': {'n_neighbors': 3, 'p': 2}},
+           {'algorithm': 'DT',  'hyperparameters': {'min_samples_split': 0.01}}
+          ]
 """
 
 import argparse
