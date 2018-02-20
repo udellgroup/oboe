@@ -90,8 +90,11 @@ class Model:
             y_te = y_train[test_idx]
 
             model = self.instantiate()
-            model.fit(x_tr, y_tr)
-            y_predicted[test_idx] = model.predict(x_te)
+            if len(np.unique(y_tr)) > 1:
+                model.fit(x_tr, y_tr)
+                y_predicted[test_idx] = model.predict(x_te)
+            else:
+                y_predicted[test_idx] = y_tr[0]
             cv_errors[i] = self.error(y_predicted[test_idx], y_te)
 
         if self.verbose:
