@@ -148,7 +148,7 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
     return compatible_columns, new_columns
 
 
-def generate_settings(algorithms, hyperparameters):
+def generate_settings(algorithms, hyperparameters, sort_algorithms=True):
     """Generate column headings of error matrix.
 
     Args:
@@ -157,6 +157,7 @@ def generate_settings(algorithms, hyperparameters):
         is hyperparameter name (str); argument to pass to scikit-learn constructor with array of values
         (e.g. {'KNN': {'n_neighbors': np.array([1, 3, 5, 7]),
                        'p': np.array([1, 2])}}).
+        sort_algorithms (boolean): A boolean variable determining whether the output headings are sorted with respect to algorithm names in alphabetical order.
 
     Returns:
         list: List of nested dictionaries, one entry for each model setting.
@@ -173,5 +174,6 @@ def generate_settings(algorithms, hyperparameters):
                     if isclose(val, round(val)):
                         configs[key] = int(round(val))
             settings.append({'algorithm': alg, 'hyperparameters': configs})
-    settings = sorted(settings, key=lambda k: k['algorithm'])
+    if sort_algorithms:
+        settings = sorted(settings, key=lambda k: k['algorithm'])
     return settings
