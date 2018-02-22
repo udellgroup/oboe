@@ -41,7 +41,7 @@ def main(args):
     assert set(configs.keys()) == {'algorithms', 'hyperparameters'}, 'Invalid arguments.'
 
     # load training dataset
-    dataset = pd.read_csv(args.data, index_col=0).values
+    dataset = pd.read_csv(args.data, header=None).values
     filename = args.data.split('/')[-1].split('.')[0]
     # if filename contains number, record number as ID; else record filename
     try:
