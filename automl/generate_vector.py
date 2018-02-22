@@ -63,7 +63,7 @@ def main(args):
         try:
             cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
         except (ZeroDivisionError, KeyError, TypeError, ValueError) as e:
-            with open(os.path.join(args.save_dir, 'errors.txt'), 'a') as log:
+            with open(os.path.join(args.save_dir, 'log.txt'), 'a') as log:
                 line = '\nID={}, model={}, {}'.format(dataset_id, setting, e)
                 log.write(line)
         results[:, i] = np.array([cv_errors.mean(), time.time() - start])
