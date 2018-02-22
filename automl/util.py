@@ -223,7 +223,7 @@ def merge_rows(save_dir):
             permutation = [headers.index(h) for h in list(dataframe)]
             error_matrix_rows += (np.expand_dims(dataframe.values[0, permutation], 0), )
             runtime_matrix_rows += (np.expand_dims(dataframe.values[1, permutation], 0), )
-            ids.append(list(dataframe.index)[0])
+            ids.append(file.split('.')[0])
             # os.remove(file_path)
 
     # save results
