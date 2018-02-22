@@ -15,4 +15,11 @@ package.
 * Gaussian Naive Bayes
 
 #### Regression Algorithms
+* 
+
+#### Notes on usage
+* lowrank-automl currently only supports datasets that
+are saved as .csv files. Additionally, it is assumed that
+these .csv files contain *only* the data, i.e. there are
+no row or column names included in the file.
 
