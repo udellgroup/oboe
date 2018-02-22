@@ -49,6 +49,9 @@ DATA_DIR=${4%/}
 P_TYPE=$5
 JSON_FILE=$6
 
+# location of this script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # generate mode - runs at most 90 parallel processes (can be changed by editing --max-procs=90 below)
 if [ "${mode}" == "generate" ]
 then
@@ -56,11 +59,11 @@ then
   mkdir -p ${SAVE_DIR}/${time}
 
   ls ${DATA_DIR}/*.csv | xargs -i --max-procs=90 bash -c \
-  "echo {}; python generate_vector.py '${P_TYPE}' {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${time}"
+  "echo {}; python ${DIR}/generate_vector.py '${P_TYPE}' {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${time}"
 fi
 
 # merge mode
 if [ "${mode}" == "merge" ]
 then
-  python util.py ${SAVE_DIR}
+  python ${DIR}/util.py ${SAVE_DIR}
 fi
