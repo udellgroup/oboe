@@ -50,7 +50,7 @@ class AutoLearner:
             path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
             default_error_matrix = pd.read_csv(path, index_col=0)
             column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
-            selected_indices = np.array([heading in column_headings for heading in column_headings])
+            selected_indices = np.array([heading in column_headings for heading in default])
             self.error_matrix = default_error_matrix.values[:, selected_indices]
             self.column_headings = sorted(default, key=lambda d: d['algorithm'])
 
