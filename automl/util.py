@@ -193,13 +193,27 @@ def merge_rows(save_dir):
         print('Invalid path.')
         return
 
-    # list of files to concatenate - all .csv files found in given directory.
-    files = [os.path.join(save_dir, file) for file in os.listdir(save_dir) if file.endswith('.csv')]
+    # find files to concatenate (all .csv files; may contain previously merged results)
+    files = [file for file in os.listdir(save_dir) if file.endswith('.csv')]
+    em, rm = 'error_matrix.csv', 'runtime_matrix.csv'
+    ids, error_matrix_rows, runtime_matrix_rows = [], (), ()
 
-    try:
-        frames = [pd.read_csv('results/' + alg + '.csv')]
-    except FileNotFoundError:
-        frames = []
+    if (em in files) and (rm in files):
+        errors = pd.read_csv(os.path.join(save_dir, files.pop(files.index(em))), index_col=0)
+        runtimes = pd.read_csv(os.path.join(save_dir, files.pop(files.index(rm))), index_col=0)
+        assert set(errors.index) == set(runtimes.index), "Previous results must share index column."
+        assert set(list(errors)) == set(list(runtimes)), "Previous results must share headers."
+        error_matrix_rows += (errors.values, )
+        runtime_matrix_rows += (runtimes.values, )
+
+    # concatenate new results
+    for file in files:
+        file_path = os.path.join(save_dir, file)
+        dataframe = pd.read_csv(file_path, index_col=0)
+        error_matrix_rows += (np.expand_dims(dataframe.values[0], 0))
+        runtime_matrix_rows += (np.expand_dims(dataframe.values[1], 0))
+        # TODO: check if headers are the same, append dataset ID, merge rows & save
+
 
 if __name__ == '__main__':
     merge_rows(sys.argv[1])
