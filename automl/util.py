@@ -3,8 +3,12 @@ Miscellaneous helper functions.
 """
 
 import numpy as np
+import pandas as pd
+import re
 import inspect
 import itertools
+import os
+import sys
 from math import isclose
 from sklearn.metrics import mean_squared_error
 
@@ -148,7 +152,7 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
     return compatible_columns, new_columns
 
 
-def generate_settings(algorithms, hyperparameters, sort_algorithms=True):
+def generate_settings(algorithms, hyperparameters, sort=True):
     """Generate column headings of error matrix.
 
     Args:
@@ -157,7 +161,7 @@ def generate_settings(algorithms, hyperparameters, sort_algorithms=True):
         is hyperparameter name (str); argument to pass to scikit-learn constructor with array of values
         (e.g. {'KNN': {'n_neighbors': np.array([1, 3, 5, 7]),
                        'p': np.array([1, 2])}}).
-        sort_algorithms (boolean): A boolean variable determining whether the output headings are sorted with respect to algorithm names in alphabetical order.
+        sort (bool): Whether to sort settings in alphabetical order with respect to algorithm name.
 
     Returns:
         list: List of nested dictionaries, one entry for each model setting.
@@ -174,6 +178,28 @@ def generate_settings(algorithms, hyperparameters, sort_algorithms=True):
                     if isclose(val, round(val)):
                         configs[key] = int(round(val))
             settings.append({'algorithm': alg, 'hyperparameters': configs})
-    if sort_algorithms:
+    if sort:
         settings = sorted(settings, key=lambda k: k['algorithm'])
     return settings
+
+
+def merge_rows(save_dir):
+    """Merge rows of error matrix. Creates two CSV files: one error matrix and one runtime matrix.
+
+    Args:
+        save_dir (str): Directory containing per-dataset CSV files of cross-validation errors & time for each model.
+    """
+    if not os.path.isdir(save_dir):
+        print('Invalid path.')
+        return
+
+    # list of files to concatenate - all .csv files found in given directory.
+    files = [os.path.join(save_dir, file) for file in os.listdir(save_dir) if file.endswith('.csv')]
+
+    try:
+        frames = [pd.read_csv('results/' + alg + '.csv')]
+    except FileNotFoundError:
+        frames = []
+
+if __name__ == '__main__':
+    merge_rows(sys.argv[1])
