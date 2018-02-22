@@ -42,8 +42,12 @@ def main(args):
 
     # load training dataset
     dataset = pd.read_csv(args.data, index_col=0).values
-    # TODO: try/except if dataset does not contain number
-    dataset_id = int(re.findall("\\d+", args.data.split('/')[-1].split('.')[0])[0])
+    filename = args.data.split('/')[-1].split('.')[0]
+    # if filename contains number, record number as ID; else record filename
+    try:
+        dataset_id = int(re.findall("\\d+", filename)[0])
+    except IndexError:
+        dataset_id = filename
     t0 = time.time()
     x = dataset[:, :-1]
     y = dataset[:, -1]
