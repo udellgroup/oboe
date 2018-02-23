@@ -2,16 +2,11 @@
 Preprocess datasets.
 """
 
-
 import numpy as np
 import scipy.sparse as sps
 from sklearn.preprocessing import scale
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import Imputer
-
-
-#categorical: a boolean array indicating which feature is categorical
-#bool_Imputer, bool_Standardization and bool_OneHotEncoder: boolean variables indicating whether to perform this type of data preprocessing method or not
 
 
 def DataPreprocessing(data_numeric, categorical, bool_imputer=True, bool_standardization=True, bool_onehotencoder=True):
