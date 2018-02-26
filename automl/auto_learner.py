@@ -22,11 +22,15 @@ class AutoLearner:
         hyperparameters (dict): A nested dict of hyperparameters to be considered; see above for example.
         n_cores (int): Maximum number of cores over which to parallelize (None means no limit).
         verbose (bool): Whether or not to generate print statements when a model finishes fitting.
+        selection_method (str): The method to select entries to actually compute.
         stacking_alg (str): Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
-                 stacking_alg='Logit', **stacking_hyperparams):
+                 selection_method='qr', stacking_alg='Logit', **stacking_hyperparams):
+
+        assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
+        compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
 
         # check if arguments to constructor are valid; set to defaults if not specified
         default, new = util.check_arguments(p_type, algorithms, hyperparameters)
@@ -35,6 +39,7 @@ class AutoLearner:
         self.hyperparameters = hyperparameters
         self.n_cores = n_cores
         self.verbose = verbose
+        self.selection_method = selection_method
 
         if len(new) > 0:
             # if selected hyperparameters contain model configurations not included in default
@@ -69,7 +74,10 @@ class AutoLearner:
         """
         print('Data={}'.format(x_train.shape))
         self.new_row = np.zeros((1, self.error_matrix.shape[1]))
-        known_indices = linalg.pivot_columns(self.error_matrix)
+        if self.selection_method == 'qr':
+            known_indices = linalg.pivot_columns(self.error_matrix)
+        # TODO: Add the part of selecting columns to minimize the variance of estimation.
+        # elif self.selection_method == 'min_variance':
 
         print('Sampling {} entries of new row...'.format(len(known_indices)))
         pool1 = mp.Pool(self.n_cores)
