@@ -48,6 +48,13 @@ def main(args):
         dataset_id = int(re.findall("\\d+", filename)[0])
     except IndexError:
         dataset_id = filename
+
+    #do not generate error matrices twice on one dataset
+    if args.error_matrix != None:
+        generated_datasets = pd.read_csv(args.error_matrix).index.tolist()
+        if dataset_id in generated_datasets:
+            return
+
     t0 = time.time()
     x = dataset[:, :-1]
     y = dataset[:, -1]
@@ -94,6 +101,8 @@ def parse_args(argv):
     parser.add_argument('--n_folds', type=int, default=10, help='Number of folds to use for k-fold cross validation.')
     parser.add_argument('--verbose', type=bool, default=False,
                         help='Whether to generate print statements on completion.')
+    parser.add_argument('--error_matrix', type=str, default=None,
+                        help='Existing error matrix. Avoid re-generate its rows.')
     return parser.parse_args(argv)
 
 
