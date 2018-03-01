@@ -51,9 +51,8 @@ def main(args):
 
     #do not generate error matrices twice on one dataset
     if args.error_matrix != None:
-        generated_datasets = pd.read_csv(args.error_matrix).index.tolist()
-        if dataset_id in generated_datasets:
-            return
+        generated_datasets = pd.read_csv(args.error_matrix, index_col=0).index.tolist()
+        assert dataset_id not in generated_datasets, 'Already generated.'
 
     t0 = time.time()
     x = dataset[:, :-1]
