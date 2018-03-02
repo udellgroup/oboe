@@ -11,8 +11,9 @@ lowrank-automl requires:
 * NumPy  (>= 1.8.2)
 * SciPy  (>= 0.13.3)
 * Scikit-Learn  (>= 0.18)
-* SMAC
 * Pathos
+* OpenML (will not be required in future versions)
+* SMAC (required for Bayesian optimization, which has not been implemented)
 
 #### User Installation
 lowrank-automl currently only supports building from source:
@@ -37,7 +38,7 @@ a dataset).
 
 ##### Low Rank Approximation
 We summarize this error matrix by a low rank approximation
-E ≈ XY using PCA.
+E ≈ X'Y using PCA.
 
 ### Online Phase
 
@@ -50,7 +51,8 @@ of other models in this dataset.
 ##### Hyperparameter Optimization
 Once we have identified several model configurations that
 we predict will perform well, we perform fine-grained 
-hyperparameter optimization using Bayesian optimization.
+hyperparameter optimization using Bayesian optimization
+(not implemented yet).
 
 ##### Ensemble Construction
 The final machine learning model is an ensemble of the
