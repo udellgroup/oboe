@@ -88,7 +88,6 @@ class AutoLearner:
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
-
             log_runtime = convex_opt.transform_and_keep_indices(self.runtime_matrix, np.log)
             projected_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.proj_to_0_to_1)
             transformed_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.inv_sigmoid)

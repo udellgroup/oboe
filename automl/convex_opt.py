@@ -101,7 +101,7 @@ def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train
         return runtime_predict
 
 
-def proj_to_0_to_1(x, eps=1e-6):
+def proj_to_0_to_1(x, eps=1e-5):
     """
     Project all entries in matrix x into region [eps, 1 - eps] by keeping entries between [-eps, eps] unchanged, replacing entries less than eps by eps, and entries larger than (1 - eps) by (1 - eps). This is to preprocess the error matrix before applying inverse sigmoid function to convert all the [0, 1] entries to (-∞, +∞).
     
