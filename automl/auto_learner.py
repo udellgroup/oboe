@@ -9,6 +9,8 @@ import pkg_resources
 import subprocess
 import linalg
 import util
+import convex_opt
+import openml
 from model import Model, Ensemble
 from pathos.multiprocessing import ProcessingPool as Pool
 
@@ -22,11 +24,15 @@ class AutoLearner:
         hyperparameters (dict): A nested dict of hyperparameters to be considered; see above for example.
         n_cores (int): Maximum number of cores over which to parallelize (None means no limit).
         verbose (bool): Whether or not to generate print statements when a model finishes fitting.
+        selection_method (str): The method to select entries to actually compute.
         stacking_alg (str): Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
-                 stacking_alg='Logit', **stacking_hyperparams):
+                 selection_method='qr', runtime_limit=None, stacking_alg='Logit', **stacking_hyperparams):
+
+        assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
+        compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
 
         # check if arguments to constructor are valid; set to defaults if not specified
         default, new = util.check_arguments(p_type, algorithms, hyperparameters)
@@ -35,24 +41,35 @@ class AutoLearner:
         self.hyperparameters = hyperparameters
         self.n_cores = n_cores
         self.verbose = verbose
+        self.selection_method = selection_method
+        self.runtime_limit = runtime_limit
 
-        if len(new) > 0:
-            # if selected hyperparameters contain model configurations not included in default
-            proceed = input("Your selected hyperparameters contain some not included in the default error matrix. \n"
-                            "Do you want to generate your own error matrix? [yes/no]")
-            if proceed == 'yes':
-                subprocess.call(['./generate_matrix.sh'])
-                # TODO: load newly generated error matrix file
-            else:
-                return
-        else:
+#        if len(new) > 0:
+#            # if selected hyperparameters contain model configurations not included in default
+#            proceed = input("Your selected hyperparameters contain some not included in the default error matrix. \n"
+#                            "Do you want to generate your own error matrix? [yes/no]")
+#            if proceed == 'yes':
+#                subprocess.call(['./generate_matrix.sh'])
+#                # TODO: load newly generated error matrix file
+#            else:
+#                return
+#        else:
+        if True:
             # use default error matrix (or subset of)
-            path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
-            default_error_matrix = pd.read_csv(path, index_col=0)
+            error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
+            runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
+            default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
+            default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
             column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
-            selected_indices = np.array([heading in column_headings for heading in default])
+            selected_indices = np.full(len(column_headings), True)
+#            selected_indices = np.array([heading in column_headings for heading in default])
             self.error_matrix = default_error_matrix.values[:, selected_indices]
-            self.column_headings = sorted(default, key=lambda d: d['algorithm'])
+            self.runtime_index = default_runtime_matrix.index.tolist()
+            self.runtime_matrix = default_runtime_matrix.values[:, selected_indices]
+            self.dataset_sizes = convex_opt.get_dataset_sizes(default_error_matrix)
+#            self.dataset_sizes = pkg_resources.resource_filename(__name__, 'defaults/dataset_sizes.csv')
+#            self.column_headings = sorted(default, key=lambda d: d['algorithm'])
+            self.column_headings = column_headings
 
         self.ensemble = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
         self.optimized_settings = []
@@ -67,10 +84,17 @@ class AutoLearner:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
         """
-        print('Data={}'.format(x_train.shape))
         self.new_row = np.zeros((1, self.error_matrix.shape[1]))
-        known_indices = linalg.pivot_columns(self.error_matrix)
+        if self.selection_method == 'qr':
+            known_indices = linalg.pivot_columns(self.error_matrix)
+        elif self.selection_method == 'min_variance':
+            log_runtime = convex_opt.transform_and_keep_indices(self.runtime_matrix, np.log)
+            projected_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.proj_to_0_to_1)
+            transformed_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.inv_sigmoid)
+            runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, self.runtime_matrix, x_train, self.runtime_index)
+            known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix)
 
+        
         print('Sampling {} entries of new row...'.format(len(known_indices)))
         pool1 = mp.Pool(self.n_cores)
         sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],

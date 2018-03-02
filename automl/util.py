@@ -32,7 +32,7 @@ from sklearn.linear_model import ElasticNet
 # TODO: include more regression algorithms
 
 
-CLS = ['KNN', 'DT', 'RF', 'GBT', 'AB', 'lSVM', 'kSVM', 'Logit', 'Perceptron', 'GNB']
+CLS = ['KNN', 'DT', 'RF', 'GBT', 'AB', 'lSVM', 'kSVM', 'Logit', 'Perceptron', 'GNB', 'MLP', 'ExtraTrees']
 REG = ['Lasso', 'Ridge', 'ElasticNet']
 
 CLASSIFICATION = dict(zip(CLS, list(map(lambda name: eval(name), CLS))))
@@ -48,7 +48,9 @@ HYPERPARAMETERS_C = {'KNN':        {'n_neighbors':       np.arange(1, 17, 2, dty
                      'kSVM':       {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
                      'Logit':      {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
                      'Perceptron': {},
-                     'GNB':        {}
+                     'GNB':        {},
+                     'MLP':        {},
+                     'ExtraTrees': {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
                      }
 HYPERPARAMETERS_R = {}
 
