@@ -2,8 +2,10 @@
 Miscellaneous helper functions.
 """
 
+import json
 import numpy as np
 import pandas as pd
+import pkg_resources
 import inspect
 import itertools
 import os
@@ -32,30 +34,17 @@ from sklearn.linear_model import ElasticNet
 # TODO: include more regression algorithms
 
 
-CLS = ['KNN', 'DT', 'RF', 'GBT', 'AB', 'lSVM', 'kSVM', 'Logit', 'Perceptron', 'GNB', 'MLP', 'ExtraTrees']
-REG = ['Lasso', 'Ridge', 'ElasticNet']
+defaults_path = pkg_resources.resource_filename(__name__, 'defaults')
+with open(os.path.join(defaults_path, 'classification.json'), 'r') as f:
+    CLS = json.load(f)
+with open(os.path.join(defaults_path, 'regression.json'), 'r') as f:
+    REG = json.load(f)
 
-CLASSIFICATION = dict(zip(CLS, list(map(lambda name: eval(name), CLS))))
-REGRESSION = dict(zip(REG, list(map(lambda name: eval(name), REG))))
+ALGORITHMS_C = dict(zip(CLS['algorithms'], list(map(lambda name: eval(name), CLS['algorithms']))))
+ALGORITHMS_R = dict(zip(REG['algorithms'], list(map(lambda name: eval(name), REG['algorithms']))))
 
-HYPERPARAMETERS_C = {'KNN':        {'n_neighbors':       np.arange(1, 17, 2, dtype=int)},
-                     'DT':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
-                     'RF':         {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
-                     'GBT':        {'learning_rate':     np.geomspace(0.1, 0.001, 3)},
-                     'AB':         {'n_estimators':      np.array([50, 100]),
-                                    'learning_rate':     np.array([1.0, 2.0])},
-                     'lSVM':       {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
-                     'kSVM':       {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
-                     'Logit':      {'C':                 np.array([0.25, 0.5, 0.75, 1.0, 2.0])},
-                     'Perceptron': {},
-                     'GNB':        {},
-                     'MLP':        {},
-                     'ExtraTrees': {'min_samples_split': np.geomspace(0.01, 0.00001, 4)},
-                     }
-HYPERPARAMETERS_R = {}
-
-DEFAULTS = {'algorithms':      {'classification': CLASSIFICATION,    'regression': REGRESSION},
-            'hyperparameters': {'classification': HYPERPARAMETERS_C, 'regression': HYPERPARAMETERS_R}}
+DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regression': ALGORITHMS_R},
+            'hyperparameters:': {'classification': CLS['hyperparameters'], 'regression': REG['hyperparameters']}}
 
 
 def error(y_observed, y_predicted, p_type):
