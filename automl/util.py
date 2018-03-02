@@ -4,7 +4,6 @@ Miscellaneous helper functions.
 
 import numpy as np
 import pandas as pd
-import re
 import inspect
 import itertools
 import os
@@ -209,6 +208,7 @@ def merge_rows(save_dir):
         runtime_matrix_rows += (runtimes.values, )
 
     # concatenate new results
+    # TODO: only load files corresponding to completed files in log.txt
     for file in files:
         file_path = os.path.join(save_dir, file)
         dataframe = pd.read_csv(file_path, index_col=0)
