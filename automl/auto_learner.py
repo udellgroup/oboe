@@ -84,7 +84,6 @@ class AutoLearner:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
         """
-        print('Data={}'.format(x_train.shape))
         self.new_row = np.zeros((1, self.error_matrix.shape[1]))
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
@@ -94,7 +93,6 @@ class AutoLearner:
             projected_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.proj_to_0_to_1)
             transformed_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.inv_sigmoid)
             runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, self.runtime_matrix, x_train, self.runtime_index)
-            print(runtime_predict)
             known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix)
 
         

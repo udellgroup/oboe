@@ -161,7 +161,6 @@ def transform_and_keep_indices(numpy_array, operator):
     return transformed_numpy_array
 
 
-
 def min_variance_model_selection(runtime_limit,
                                  runtime_predict, error_matrix, threshold=0.03,
                                  bool_plot_solution_quality=False, relaxation_threshold=0.8):
