@@ -8,12 +8,13 @@ usage () {
     $0  [-m] mode <max_procs> <save_dir> <data_dir> <p_type> <json>
 
    -m:         mode in which to run, either "generate" or "merge".
-   <max_procs>:(g) maximum number of processes assigned to error matrix generation.
    <save_dir>: (g) where to save results / (m) where results are saved.
    <data_dir>: (g) path to directory containing training datasets are located.
    <p_type>:   (g) problem type, either "classification" or "regression".
    <json>:     (g) path to model configurations json file.
    <err_mtx>   (g) error matrix already generated.
+   <max_procs>:(g) maximum number of processes assigned to error matrix generation.
+
 HELP_USAGE
 }
 
@@ -45,13 +46,13 @@ then
   exit 1
 fi
 
-MAX_PROCS=$3
 # strip '/' from end of file path (if there is one)
-SAVE_DIR=${4%/}
-DATA_DIR=${5%/}
-P_TYPE=$6
-JSON_FILE=$7
-ERROR_MATRIX=$8
+SAVE_DIR=${3%/}
+DATA_DIR=${4%/}
+P_TYPE=$5
+JSON_FILE=$6
+ERROR_MATRIX=$7
+MAX_PROCS=$8
 
 # location of this script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
