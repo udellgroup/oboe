@@ -46,6 +46,12 @@ then
   exit 1
 fi
 
+# no limit for maximum number of processes if no number is given
+if [ "$8" == "" ]
+then
+  "$8" = "0"
+fi
+
 # strip '/' from end of file path (if there is one)
 SAVE_DIR=${3%/}
 DATA_DIR=${4%/}
