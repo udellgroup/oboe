@@ -44,7 +44,7 @@ ALGORITHMS_C = dict(zip(CLS['algorithms'], list(map(lambda name: eval(name), CLS
 ALGORITHMS_R = dict(zip(REG['algorithms'], list(map(lambda name: eval(name), REG['algorithms']))))
 
 DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regression': ALGORITHMS_R},
-            'hyperparameters:': {'classification': CLS['hyperparameters'], 'regression': REG['hyperparameters']}}
+            'hyperparameters': {'classification': CLS['hyperparameters'], 'regression': REG['hyperparameters']}}
 
 
 def error(y_observed, y_predicted, p_type):
