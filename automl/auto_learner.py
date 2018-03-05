@@ -29,7 +29,8 @@ class AutoLearner:
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
-                 selection_method='qr', runtime_limit=None, stacking_alg='Logit', **stacking_hyperparams):
+                 selection_method='qr', runtime_limit=None, transform_error_matrix=False,
+                 stacking_alg='Logit', **stacking_hyperparams):
 
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
         compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
@@ -43,6 +44,7 @@ class AutoLearner:
         self.verbose = verbose
         self.selection_method = selection_method
         self.runtime_limit = runtime_limit
+        self.transform_error_matrix = transform_error_matrix
 
 #        if len(new) > 0:
 #            # if selected hyperparameters contain model configurations not included in default
@@ -60,10 +62,12 @@ class AutoLearner:
             runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
             default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
             default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
+            assert set(default_error_matrix.index.tolist()) == set(default_runtime_matrix.index.tolist()), "Indices of error and runtime matrices must match."
             column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
             selected_indices = np.full(len(column_headings), True)
 #            selected_indices = np.array([heading in column_headings for heading in default])
             self.error_matrix = default_error_matrix.values[:, selected_indices]
+            self.error_index = default_error_matrix.index.tolist()
             self.runtime_index = default_runtime_matrix.index.tolist()
             self.runtime_matrix = default_runtime_matrix.values[:, selected_indices]
             self.dataset_sizes = convex_opt.get_dataset_sizes(default_error_matrix)
@@ -88,13 +92,18 @@ class AutoLearner:
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
-            log_runtime_matrix = convex_opt.transform_and_keep_indices(self.runtime_matrix, np.log)
-            projected_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.proj_to_0_to_1)
-            transformed_error_matrix = convex_opt.transform_and_keep_indices(self.error_matrix, convex_opt.inv_sigmoid)
-            log_runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, log_runtime_matrix, x_train, self.runtime_index)
-            runtime_predict = convex_opt.transform_and_keep_indices(log_runtime_predict, np.exp)
-            known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, transformed_error_matrix)
+#            error_matrix_with_ind = np.concatenate((np.array([self.error_index]).T, self.error_matrix), axis=1)
+#            runtime_matrix_with_ind = np.concatenate((np.array([self.runtime_index]).T, self.runtime_matrix), axis=1)
 
+            log_runtime_matrix = np.log(self.runtime_matrix)
+            print(repr(linalg.approx_rank(self.error_matrix)))
+            log_runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, log_runtime_matrix, x_train, self.runtime_index)
+            runtime_predict = np.exp(log_runtime_predict)
+            if self.transform_error_matrix:
+                error_matrix_transformed = convex_opt.inv_sigmoid(convex_opt.proj_to_0_to_1(self.error_matrix))
+                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed)
+            else:
+                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix)
         
         print('Sampling {} entries of new row...'.format(len(known_indices)))
         pool1 = mp.Pool(self.n_cores)

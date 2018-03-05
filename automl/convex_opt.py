@@ -53,13 +53,13 @@ def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train
     Args:
         dataset_sizes (np.ndarray): Matrix for dataset sizes. Each row is [dataset_index, number_of_data_points, number_of_features].
         poly_order (int): The order of polynomials used in runtime fitting.
-        runtime_train (np.ndarray): A matrix containing runtime of models (or their logarithms) on training datasets. The first column is dataset indices.
+        runtime_train (np.ndarray): A matrix containing runtime of models (or their logarithms) on training datasets.
         x_train (np.ndarray): Features of the training dataset.
         bool_log (Boolean): Whether to take into log(n) in polynomial fitting.
         bool_return_coefs (Boolean): Whether to return coefficients of linear fitting.
         
     Returns:
-        runtime_predict (np.ndarray): Predicted runtime of models or their logarithms, depending on the input. The first entry is dataset indices.
+        runtime_predict (np.ndarray): Predicted runtime of models or their logarithms, depending on the input.
         coefs (np.ndarray): Optional, only exist when bool_return_coefs==True. Coefficients of polynomial fittings.
         
     """
@@ -186,9 +186,11 @@ def min_variance_model_selection(runtime_limit,
         λ_indices_selected (np.ndarray): The indices of selected columns.
         
     """
+    num_models = error_matrix.shape[1]
     
     assert threshold>0 and threshold<1, "The threshold for truncating singular values should be a float between 0 and 1."
     assert relaxation_threshold>0 and relaxation_threshold<1, "The threshold for converting relaxed integer programming problem back to the integer version should be a float between 0 and 1."
+    assert num_models == len(runtime_predict), "Numbers of models in error matrix and predicted runtime must match."
     
     
 #    #In package testing, delete the corresponding rows in runtime matrix and error matrix if the rows corresponding to test_dataset_index appears in them.
@@ -200,8 +202,6 @@ def min_variance_model_selection(runtime_limit,
 #    if test_dataset_index in indices_em:
 #        error_matrix = np.delete(error_matrix, list(indices_em).index(test_dataset_index), 0)
 
-    _, num_models = error_matrix.shape
-
     #low rank approximation
 
     rank = lrm.approx_rank(error_matrix, threshold=threshold)
@@ -209,6 +209,9 @@ def min_variance_model_selection(runtime_limit,
     X,Y,Vt = lrm.pca(error_matrix, threshold=threshold)
     num_pivots_selected = rank
     
+    print("lrm finished")
+    print(repr(runtime_predict))
+
     #model selection for variance minimization via D-optimal design
     λ = Variable(num_models)
     objective = Minimize(-log_det(sum([λ[i]*np.outer(Y[:, i], Y[:, i]) for i in range(num_models)])))
@@ -219,6 +222,8 @@ def min_variance_model_selection(runtime_limit,
     result = prob.solve()
     #the solution to λ in numpy array format
     λ_sol = np.array(λ.value).T[0]
+    
+    print("cvxopt finished")
 
     if bool_plot_solution_quality:
         f = plt.figure()
