@@ -126,7 +126,6 @@ def sigmoid(x):
         np.ndarray: Entries within (-∞, +∞).
         
     """
-    
     return 1/(1+np.exp(-x))
 
 def inv_sigmoid(x):
@@ -140,7 +139,6 @@ def inv_sigmoid(x):
         np.ndarray: Entries within (0, 1).
         
     """
-    
     return -np.log(1/x - 1)
 
 
@@ -167,9 +165,9 @@ def transform_and_keep_indices(numpy_array, operator):
     return transformed_numpy_array
 
 
-def min_variance_model_selection(runtime_limit,
-                                 runtime_predict, error_matrix, threshold=0.03,
-                                 bool_plot_solution_quality=False, relaxation_threshold=0.8):
+def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
+                                 threshold=0.03, bool_plot_solution_quality=False,
+                                 relaxation_threshold=0.8):
     
     """
     Select models with the assumption of i.i.d. random Gaussian noise on each observation, and aims to minimize the variance of latent representation of the new row in the error matrix.
@@ -208,9 +206,6 @@ def min_variance_model_selection(runtime_limit,
     rank_one_percent = lrm.approx_rank(error_matrix, threshold=0.01)
     X,Y,Vt = lrm.pca(error_matrix, threshold=threshold)
     num_pivots_selected = rank
-    
-    print("lrm finished")
-    print(repr(runtime_predict))
 
     #model selection for variance minimization via D-optimal design
     λ = Variable(num_models)
@@ -222,8 +217,6 @@ def min_variance_model_selection(runtime_limit,
     result = prob.solve()
     #the solution to λ in numpy array format
     λ_sol = np.array(λ.value).T[0]
-    
-    print("cvxopt finished")
 
     if bool_plot_solution_quality:
         f = plt.figure()
@@ -232,7 +225,6 @@ def min_variance_model_selection(runtime_limit,
         f.savefig('runtime='+str(runtime_limit)+'.png', dpi=250, bbox_inches='tight', format = 'png')
     
     λ_indices_selected = np.where(λ_sol>relaxation_threshold)[0]
-
     return λ_indices_selected
 
 
