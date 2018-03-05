@@ -156,8 +156,14 @@ def transform_and_keep_indices(numpy_array, operator):
         transformed_numpy_array(np.ndarray): the transformed numpy array.
         
     """
+    dim = len(numpy_array.shape)
+    assert dim == 1 or dim == 2, "Input must be a 1-D or 2-D numpy array."
+    if dim == 1:
+        numpy_array = np.array([numpy_array])
     transformed_numpy_array = np.concatenate((np.array([numpy_array[:, 0]]).T,
                                               operator(numpy_array[:, 1:])), axis=1)
+    if dim == 1:
+        transformed_numpy_array = transformed_numpy_array[0, :]
     return transformed_numpy_array
 
 
