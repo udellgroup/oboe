@@ -46,7 +46,7 @@ def get_dataset_sizes(default_error_matrix):
     return dataset_sizes
 
 
-def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train, x_train, runtime_index, bool_log=True, bool_return_coefs=False):
+def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train, x_train, runtime_index_train, bool_log=True, bool_return_coefs=False):
     """
     Based on dataset sizes and model runtimes, predict the runtime of models on a new dataset.
     
@@ -63,8 +63,9 @@ def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train
         coefs (np.ndarray): Optional, only exist when bool_return_coefs==True. Coefficients of polynomial fittings.
         
     """
+    assert len(runtime_index_train) == runtime_train.shape[0], "The number of runtime indices and rows in runtime matrix must match."
     num_training_sets, num_models = runtime_train.shape
-    indices = np.array([np.where(dataset_sizes[:, 0]==runtime_index[i])[0][0] for i in range(len(runtime_train[:, 0]))])
+    indices = np.array([np.where(dataset_sizes[:, 0]==runtime_index_train[i])[0][0] for i in range(runtime_train.shape[0])])
     X = dataset_sizes[indices, 1:]
     if bool_log:
         transformer = FunctionTransformer(np.log)
