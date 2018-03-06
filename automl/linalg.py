@@ -67,7 +67,7 @@ def impute(A, a, known_indices, threshold=0.03):
     x, y, _ = pca(A, threshold=threshold)
 
     # find x using matrix division using known portion of a, corresponding columns of A
-    x = np.linalg.lstsq(y[:, known_indices].T, a[:, known_indices].T)[0].T
+    x = np.linalg.lstsq(y[:, known_indices].T, a[:, known_indices].T, rcond=None)[0].T
 
     # approximate full a as x*Y
     return np.dot(x, y)
