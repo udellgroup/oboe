@@ -74,6 +74,7 @@ class AutoLearner:
 #            self.dataset_sizes = pkg_resources.resource_filename(__name__, 'defaults/dataset_sizes.csv')
 #            self.column_headings = sorted(default, key=lambda d: d['algorithm'])
             self.column_headings = column_headings
+            self.bayes_opt = bayes_opt
 
         self.ensemble = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
         self.optimized_settings = []
