@@ -103,9 +103,10 @@ class AutoLearner:
             runtime_predict = np.exp(log_runtime_predict)
             if self.transform_error_matrix:
                 error_matrix_transformed = convex_opt.inv_sigmoid(convex_opt.proj_to_0_to_1(self.error_matrix))
-                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed)
+                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict,
+                                                                        error_matrix_transformed, n_cores=n_cores)
             else:
-                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix)
+                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=n_cores)
 
         if self.debug_mode:
             self.num_known_indices = len(known_indices)

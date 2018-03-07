@@ -13,6 +13,7 @@ from scipy.linalg import qr
 import glob
 from os.path import basename
 import os
+import multiprocessing
 
 #import scikit-learn modules
 from sklearn.preprocessing import PolynomialFeatures
@@ -167,7 +168,7 @@ def transform_and_keep_indices(numpy_array, operator):
 
 
 def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
-                                 threshold=0.03, bool_plot_solution_quality=False,
+                                 n_cores=None, threshold=0.03, bool_plot_solution_quality=False,
                                  relaxation_threshold=0.8):
     
     """
@@ -186,10 +187,13 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
         
     """
     num_models = error_matrix.shape[1]
+    if n_cores == None:
+        n_cores = multiprocessing.cpu_count()
     
     assert threshold>0 and threshold<1, "The threshold for truncating singular values should be a float between 0 and 1."
     assert relaxation_threshold>0 and relaxation_threshold<1, "The threshold for converting relaxed integer programming problem back to the integer version should be a float between 0 and 1."
     assert num_models == len(runtime_predict), "Numbers of models in error matrix and predicted runtime must match."
+    #assert n_cores to be int
     
     
 #    #In package testing, delete the corresponding rows in runtime matrix and error matrix if the rows corresponding to test_dataset_index appears in them.
@@ -213,7 +217,7 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
     objective = Minimize(-log_det(sum([λ[i]*np.outer(Y[:, i], Y[:, i]) for i in range(num_models)])))
     constraints = [0 <= λ, λ <= 1]
     # time constraint
-    constraints += [runtime_predict*λ <= runtime_limit]
+    constraints += [runtime_predict*λ <= runtime_limit*n_cores]
     prob = Problem(objective, constraints)
     result = prob.solve()
     #the solution to λ in numpy array format
