@@ -133,7 +133,7 @@ class AutoLearner:
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                      self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                                for i in np.argsort(self.new_row.flatten())[:n_models]]
-        if bayes_opt:
+        if self.bayes_opt:
             pool2 = Pool(self.n_cores)
             optimized_hyperparams = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
             pool2.close()
