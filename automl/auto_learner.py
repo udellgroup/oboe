@@ -103,7 +103,7 @@ class AutoLearner:
             log_runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, log_runtime_matrix, x_train, self.runtime_index)
             runtime_predict = np.exp(log_runtime_predict)
             if self.transform_error_matrix:
-                error_matrix_transformed = convex_opt.inv_sigmoid(convex_opt.proj_to_0_to_1(self.error_matrix))
+                error_matrix_transformed = convex_opt.inv_sigmoid(convex_opt.truncate(self.error_matrix))
                 known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict,
                                                                         error_matrix_transformed, n_cores=self.n_cores)
             else:
@@ -135,8 +135,6 @@ class AutoLearner:
 
         # TODO: Fit ensemble candidates (?)
         
-
-
         n_models = 3
 
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],

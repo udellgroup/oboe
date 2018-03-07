@@ -47,7 +47,7 @@ def get_dataset_sizes(default_error_matrix):
     return dataset_sizes
 
 
-def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train, x_train, runtime_index_train, bool_log=True, bool_return_coefs=False):
+def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train, x_train, runtime_index_train, log=True, return_coefs=False):
     """
     Based on dataset sizes and model runtimes, predict the runtime of models on a new dataset.
     
@@ -56,19 +56,19 @@ def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train
         poly_order (int): The order of polynomials used in runtime fitting.
         runtime_train (np.ndarray): A matrix containing runtime of models (or their logarithms) on training datasets.
         x_train (np.ndarray): Features of the training dataset.
-        bool_log (Boolean): Whether to take into log(n) in polynomial fitting.
-        bool_return_coefs (Boolean): Whether to return coefficients of linear fitting.
+        log (Boolean): Whether to take into log(n) in polynomial fitting.
+        return_coefs (Boolean): Whether to return coefficients of linear fitting.
         
     Returns:
         runtime_predict (np.ndarray): Predicted runtime of models or their logarithms, depending on the input.
-        coefs (np.ndarray): Optional, only exist when bool_return_coefs==True. Coefficients of polynomial fittings.
+        coefs (np.ndarray): Optional, only exist when return_coefs==True. Coefficients of polynomial fittings.
         
     """
     assert len(runtime_index_train) == runtime_train.shape[0], "The number of runtime indices and rows in runtime matrix must match."
     num_training_sets, num_models = runtime_train.shape
     indices = np.array([np.where(dataset_sizes[:, 0]==runtime_index_train[i])[0][0] for i in range(runtime_train.shape[0])])
     X = dataset_sizes[indices, 1:]
-    if bool_log:
+    if log:
         transformer = FunctionTransformer(np.log)
         X_logn = transformer.transform(np.array([X[:, 0]]).T)
         X_combined = np.concatenate((X, X_logn), axis=1)
@@ -77,7 +77,7 @@ def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train
 
     x = np.array([x_train.shape])
 
-    if bool_log:
+    if log:
         x_logn = transformer.transform(x[0, 0])
         x_combined = np.concatenate((x, x_logn), axis=1)
     else:
@@ -97,13 +97,13 @@ def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train
 
     runtime_predict = np.array(runtime_predict)
 
-    if bool_return_coefs:
+    if return_coefs:
         return runtime_predict, coefs
     else:
         return runtime_predict
 
 
-def proj_to_0_to_1(x, eps=1e-5):
+def truncate(x, eps=1e-5):
     """
     Project all entries in matrix x into region [eps, 1 - eps] by keeping entries between [-eps, eps] unchanged, replacing entries less than eps by eps, and entries larger than (1 - eps) by (1 - eps). This is to preprocess the error matrix before applying inverse sigmoid function to convert all the [0, 1] entries to (-∞, +∞).
     
@@ -168,22 +168,23 @@ def transform_and_keep_indices(numpy_array, operator):
 
 
 def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
-                                 n_cores=None, threshold=0.03, bool_plot_solution_quality=False,
+                                 n_cores=None, threshold=0.03, plot_solution_quality=False,
                                  relaxation_threshold=0.8):
     
     """
-    Select models with the assumption of i.i.d. random Gaussian noise on each observation, and aims to minimize the variance of latent representation of the new row in the error matrix.
+    Select models with the assumption of iid random Gaussian noise on each observation, and aims to minimize the variance of latent representation of the new row in the error matrix.
     
     Args:
         runtime_limit (float): The user-specified time limit for running selected models.
+        runtime_predict (np.ndarray): Vector of predicted runtime of all models on the new dataset.
         error_matrix (np.ndarray): The error matrix in use.
-        threshold (float): The threshold for truncating singular values.
-        bool_plot_solution_quality (Boolean): Whether to plot the λ values of the relaxed integer programming problem.
-        relaxation_threshold (float): The threshold for truncating λ values to get an approximate solution for the original integer programming problem.
-        
+        n_cores (int): The number of cores as resource limit.
+        threshold (float): The threshold for truncating singular values to get matrix Y.
+        plot_solution_quality (Boolean): Whether to plot the v values of the relaxed integer programming problem.
+        relaxation_threshold (float): The threshold for truncating v values to get an approximate solution for the original integer programming problem.
         
     Returns:
-        λ_indices_selected (np.ndarray): The indices of selected columns.
+        v_indices_selected (np.ndarray): The indices of selected columns.
         
     """
     num_models = error_matrix.shape[1]
@@ -193,44 +194,42 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
     assert threshold>0 and threshold<1, "The threshold for truncating singular values should be a float between 0 and 1."
     assert relaxation_threshold>0 and relaxation_threshold<1, "The threshold for converting relaxed integer programming problem back to the integer version should be a float between 0 and 1."
     assert num_models == len(runtime_predict), "Numbers of models in error matrix and predicted runtime must match."
-    #assert n_cores to be int
+    assert type(n_cores) == int, "The number of cores provided as resource limit should be an integer."
     
-    
-#    #In package testing, delete the corresponding rows in runtime matrix and error matrix if the rows corresponding to test_dataset_index appears in them.
-#
-#    indices_runtime = runtime_limit[:, 0]
-#    indices_em = error_matrix[:, 0]
-#    if test_dataset_index in indices_runtime:
-#        runtime_limit = np.delete(runtime_limit, list(indices_runtime).index(test_dataset_index), 0)
-#    if test_dataset_index in indices_em:
-#        error_matrix = np.delete(error_matrix, list(indices_em).index(test_dataset_index), 0)
+    """
+    #In package testing, delete the corresponding rows in runtime matrix and error matrix if the rows corresponding to test_dataset_index appears in them.
+
+    indices_runtime = runtime_limit[:, 0]
+    indices_em = error_matrix[:, 0]
+    if test_dataset_index in indices_runtime:
+        runtime_limit = np.delete(runtime_limit, list(indices_runtime).index(test_dataset_index), 0)
+    if test_dataset_index in indices_em:
+        error_matrix = np.delete(error_matrix, list(indices_em).index(test_dataset_index), 0)
+    """
 
     #low rank approximation
-
     rank = lrm.approx_rank(error_matrix, threshold=threshold)
     rank_one_percent = lrm.approx_rank(error_matrix, threshold=0.01)
     X,Y,Vt = lrm.pca(error_matrix, threshold=threshold)
     num_pivots_selected = rank
 
     #model selection for variance minimization via D-optimal design
-    λ = Variable(num_models)
-    objective = Minimize(-log_det(sum([λ[i]*np.outer(Y[:, i], Y[:, i]) for i in range(num_models)])))
-    constraints = [0 <= λ, λ <= 1]
-    # time constraint
-    constraints += [runtime_predict*λ <= runtime_limit*n_cores]
+    v = Variable(num_models)
+    objective = Minimize(-log_det(sum([v[i]*np.outer(Y[:, i], Y[:, i]) for i in range(num_models)])))
+    constraints = [0 <= v, v <= 1]
+    constraints += [runtime_predict*v <= runtime_limit*n_cores] # time constraint
     prob = Problem(objective, constraints)
     result = prob.solve()
-    #the solution to λ in numpy array format
-    λ_sol = np.array(λ.value).T[0]
+    v_sol = np.array(v.value).T[0] #the solution to v in numpy array format
 
-    if bool_plot_solution_quality:
+    if plot_solution_quality:
         f = plt.figure()
-        plt.hist(λ_sol)
-        plt.title('Distribution of λ Values when runtime='+str(runtime_limit))
+        plt.hist(v_sol)
+        plt.title('Distribution of v Values when runtime='+str(runtime_limit))
         f.savefig('runtime='+str(runtime_limit)+'.png', dpi=250, bbox_inches='tight', format = 'png')
     
-    λ_indices_selected = np.where(λ_sol>relaxation_threshold)[0]
-    return λ_indices_selected
+    v_indices_selected = np.where(v_sol>relaxation_threshold)[0]
+    return v_indices_selected
 
 
 
