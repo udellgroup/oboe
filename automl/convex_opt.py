@@ -56,6 +56,7 @@ def runtime_prediction_via_poly_fitting(dataset_sizes, poly_order, runtime_train
         poly_order (int): The order of polynomials used in runtime fitting.
         runtime_train (np.ndarray): A matrix containing runtime of models (or their logarithms) on training datasets.
         x_train (np.ndarray): Features of the training dataset.
+        runtime_index_train (np.ndarray): A vector of dataset indices in the runtime_train matrix.
         log (Boolean): Whether to take into log(n) in polynomial fitting.
         return_coefs (Boolean): Whether to return coefficients of linear fitting.
         
@@ -122,10 +123,10 @@ def sigmoid(x):
     Sigmoid function.
     
     Args:
-        x (np.ndarray): Entries within (0, 1).
+        x (np.ndarray): Entries are within (0, 1).
         
     Returns:
-        np.ndarray: Entries within (-∞, +∞).
+        np.ndarray: Entries are within (-∞, +∞).
         
     """
     return 1/(1+np.exp(-x))
@@ -135,10 +136,10 @@ def inv_sigmoid(x):
     Inverse sigmoid function.
     
     Args:
-        x (np.ndarray): Entries within (-∞, +∞).
+        x (np.ndarray): Entries are within (-∞, +∞).
     
     Returns:
-        np.ndarray: Entries within (0, 1).
+        np.ndarray: Entries are within (0, 1).
         
     """
     return -np.log(1/x - 1)
@@ -196,16 +197,14 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
     assert num_models == len(runtime_predict), "Numbers of models in error matrix and predicted runtime must match."
     assert type(n_cores) == int, "The number of cores provided as resource limit should be an integer."
     
-    """
-    #In package testing, delete the corresponding rows in runtime matrix and error matrix if the rows corresponding to test_dataset_index appears in them.
-
-    indices_runtime = runtime_limit[:, 0]
-    indices_em = error_matrix[:, 0]
-    if test_dataset_index in indices_runtime:
-        runtime_limit = np.delete(runtime_limit, list(indices_runtime).index(test_dataset_index), 0)
-    if test_dataset_index in indices_em:
-        error_matrix = np.delete(error_matrix, list(indices_em).index(test_dataset_index), 0)
-    """
+#    #In package testing, delete the corresponding rows in runtime matrix and error matrix if the rows corresponding to test_dataset_index appears in them.
+#
+#    indices_runtime = runtime_limit[:, 0]
+#    indices_em = error_matrix[:, 0]
+#    if test_dataset_index in indices_runtime:
+#        runtime_limit = np.delete(runtime_limit, list(indices_runtime).index(test_dataset_index), 0)
+#    if test_dataset_index in indices_em:
+#        error_matrix = np.delete(error_matrix, list(indices_em).index(test_dataset_index), 0)
 
     #low rank approximation
     rank = lrm.approx_rank(error_matrix, threshold=threshold)
