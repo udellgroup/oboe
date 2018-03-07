@@ -29,7 +29,7 @@ class AutoLearner:
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
-                 selection_method='qr', runtime_limit=None, transform_error_matrix=False,
+                 selection_method='qr', runtime_limit=None, transform_error_matrix=False, bayes_opt=False,
                  stacking_alg='Logit', **stacking_hyperparams):
 
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
@@ -123,17 +123,23 @@ class AutoLearner:
         # self.error_matrix = np.vstack((self.error_matrix, self.new_row))
 
         # TODO: Fit ensemble candidates (?)
+        
 
         if self.verbose:
             print('\nConducting Bayesian optimization...')
         n_models = 3
-        pool2 = Pool(self.n_cores)
+
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                      self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                                for i in np.argsort(self.new_row.flatten())[:n_models]]
-        optimized_hyperparams = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
-        pool2.close()
-        pool2.join()
+        if bayes_opt:
+            pool2 = Pool(self.n_cores)
+            optimized_hyperparams = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
+            pool2.close()
+            pool2.join()
+        else:
+            optimized_hyperparams = [m.hyperparameters for m in bayesian_opt_models]
+
         for i, params in enumerate(optimized_hyperparams):
             bayesian_opt_models[i].hyperparameters = params
             self.ensemble.add_base_learner(bayesian_opt_models[i])
