@@ -30,7 +30,7 @@ class AutoLearner:
     """
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
                  selection_method='qr', runtime_limit=None, transform_error_matrix=False, bayes_opt=False,
-                 stacking_alg='Logit', **stacking_hyperparams):
+                 debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
 
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
         compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
@@ -75,6 +75,7 @@ class AutoLearner:
 #            self.column_headings = sorted(default, key=lambda d: d['algorithm'])
             self.column_headings = column_headings
             self.bayes_opt = bayes_opt
+            self.debug_mode = debug_mode
 
         self.ensemble = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
         self.optimized_settings = []
@@ -105,6 +106,11 @@ class AutoLearner:
                 known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed)
             else:
                 known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix)
+
+        if self.debug_mode:
+            self.num_known_indices = len(known_indices)
+            pivot_columns_one_percent = linalg.pivot_columns(self.error_matrix, threshold=0.01)
+            self.num_overlap_with_pivots = len(set(known_indices).intersection(set(pivot_columns_one_percent)))
         
         print('Sampling {} entries of new row...'.format(len(known_indices)))
         pool1 = mp.Pool(self.n_cores)
@@ -126,14 +132,15 @@ class AutoLearner:
         # TODO: Fit ensemble candidates (?)
         
 
-        if self.verbose:
-            print('\nConducting Bayesian optimization...')
+
         n_models = 3
 
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                      self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                                for i in np.argsort(self.new_row.flatten())[:n_models]]
         if self.bayes_opt:
+            if self.verbose:
+                print('\nConducting Bayesian optimization...')
             pool2 = Pool(self.n_cores)
             optimized_hyperparams = pool2.map(Model.bayesian_optimize, bayesian_opt_models)
             pool2.close()

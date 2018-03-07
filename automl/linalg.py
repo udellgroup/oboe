@@ -21,16 +21,17 @@ def approx_rank(a, threshold=0.03):
     return len(rank)
 
 
-def pivot_columns(a):
+def pivot_columns(a, threshold=0.03):
     """Computes the QR decomposition of a matrix with column pivoting, i.e. solves the equation AP=QR such that Q is
     orthogonal, R is upper triangular, and P is a permutation matrix.
 
     Args:
         a (np.ndarray): Matrix for which to compute QR decomposition.
+        threshold (float): All singular values less than threshold * (largest singular value) will be set to 0
     Returns:
         np.array: The permutation p.
     """
-    rank = approx_rank(a)
+    rank = approx_rank(a, threshold=threshold)
     return qr(a, pivoting=True)[2][:rank]
 
 
