@@ -45,6 +45,7 @@ class AutoLearner:
         self.selection_method = selection_method
         self.runtime_limit = runtime_limit
         self.transform_error_matrix = transform_error_matrix
+        self.n_cores = n_cores
 
 #        if len(new) > 0:
 #            # if selected hyperparameters contain model configurations not included in default
@@ -104,9 +105,10 @@ class AutoLearner:
             if self.transform_error_matrix:
                 error_matrix_transformed = convex_opt.inv_sigmoid(convex_opt.proj_to_0_to_1(self.error_matrix))
                 known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict,
-                                                                        error_matrix_transformed, n_cores=n_cores)
+                                                                        error_matrix_transformed, n_cores=self.n_cores)
             else:
-                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=n_cores)
+                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict,
+                                                                        self.error_matrix, n_cores=self.n_cores)
 
         if self.debug_mode:
             self.num_known_indices = len(known_indices)
