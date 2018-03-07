@@ -110,6 +110,7 @@ class AutoLearner:
         if self.debug_mode:
             self.num_known_indices = len(known_indices)
             pivot_columns_one_percent = linalg.pivot_columns(self.error_matrix, threshold=0.01)
+            self.num_pivots_one_percent = len(pivot_columns_one_percent)
             self.num_overlap_with_pivots = len(set(known_indices).intersection(set(pivot_columns_one_percent)))
         
         print('Sampling {} entries of new row...'.format(len(known_indices)))
