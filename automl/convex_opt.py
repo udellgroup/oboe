@@ -35,7 +35,7 @@ def solve(t_predicted, t_max, Y):
     v0 = np.full((n, ), 0.5)
     constraints = {'type': 'ineq', 'fun': constraint}
     v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, constraints=constraints)
-    return v_opt
+    return v_opt.x
 
 
 def predict_runtime(size, saved_model=None):
