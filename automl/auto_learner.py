@@ -107,7 +107,8 @@ class AutoLearner:
                     known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed, n_cores=self.n_cores)
                 elif self.cvxopt_package == 'scipy':
                     X,Y,Vt = linalg.pca(error_matrix_transformed, threshold=0.03)
-                    known_indices = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
+                    v_opt = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
+                    known_indices = np.where(np.array(v_opt.x)>0.8)[0]
             else:
                 if self.cvxopt_package == 'cvxpy':
                     known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=self.n_cores)
@@ -115,9 +116,6 @@ class AutoLearner:
                     X,Y,Vt = linalg.pca(self.error_matrix, threshold=0.03)
                     v_opt = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
                     known_indices = np.where(np.array(v_opt.x)>0.8)[0]
-
-            print(known_indices)
-
 
         if self.debug_mode:
             self.num_known_indices = len(known_indices)
