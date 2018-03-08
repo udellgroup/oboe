@@ -18,6 +18,7 @@ Settings: [{'algorithm': 'KNN', 'hyperparameters': {'n_neighbors': 1, 'p': 1}},
           ]
 """
 
+# TODO: record dataset sizes
 import argparse
 import numpy as np
 import pandas as pd
