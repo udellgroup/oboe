@@ -22,7 +22,7 @@ def solve(t_predicted, t_max, Y):
          t_max (float):            maximum runtime of sampled model
          Y (np.ndarray):           matrix representing latent variable weights of error matrix
     Returns:
-        np.ndarray:                optimal vector v (not truncated to binary values)
+        scipy.optimize.OptimizeResult: optimization result. Refer to https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.OptimizeResult.html#scipy.optimize.OptimizeResult for more information.
     """
     def objective(v):
         sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
