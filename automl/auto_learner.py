@@ -10,6 +10,7 @@ import subprocess
 import linalg
 import util
 import convex_opt
+import convex_opt2
 import openml
 from model import Model, Ensemble
 from pathos.multiprocessing import ProcessingPool as Pool
@@ -28,9 +29,7 @@ class AutoLearner:
         stacking_alg (str): Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
-    def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
-                 selection_method='qr', runtime_limit=None, transform_error_matrix=False, bayes_opt=False,
-                 debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
+    def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False, selection_method='qr', runtime_limit=None, cvxopt_package='cvxpy', transform_error_matrix=False, bayes_opt=False, debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
 
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
         compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
@@ -46,6 +45,7 @@ class AutoLearner:
         self.runtime_limit = runtime_limit
         self.transform_error_matrix = transform_error_matrix
         self.n_cores = n_cores
+        self.cvxopt_package = cvxopt_package
 
 #        if len(new) > 0:
 #            # if selected hyperparameters contain model configurations not included in default
@@ -99,16 +99,25 @@ class AutoLearner:
 #            runtime_matrix_with_ind = np.concatenate((np.array([self.runtime_index]).T, self.runtime_matrix), axis=1)
 
             log_runtime_matrix = np.log(self.runtime_matrix)
-            print(repr(linalg.approx_rank(self.error_matrix)))
             log_runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, log_runtime_matrix, x_train, self.runtime_index)
             runtime_predict = np.exp(log_runtime_predict)
             if self.transform_error_matrix:
                 error_matrix_transformed = convex_opt.inv_sigmoid(convex_opt.truncate(self.error_matrix))
-                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict,
-                                                                        error_matrix_transformed, n_cores=self.n_cores)
+                if self.cvxopt_package == 'cvxpy':
+                    known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed, n_cores=self.n_cores)
+                elif self.cvxopt_package == 'scipy':
+                    X,Y,Vt = linalg.pca(error_matrix_transformed, threshold=0.03)
+                    known_indices = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
             else:
-                known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict,
-                                                                        self.error_matrix, n_cores=self.n_cores)
+                if self.cvxopt_package == 'cvxpy':
+                    known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=self.n_cores)
+                elif self.cvxopt_package == 'scipy':
+                    X,Y,Vt = linalg.pca(self.error_matrix, threshold=0.03)
+                    v_opt = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
+                    known_indices = np.where(np.array(v_opt.x)>0.8)[0]
+
+            print(known_indices)
+
 
         if self.debug_mode:
             self.num_known_indices = len(known_indices)
