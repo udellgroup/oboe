@@ -56,9 +56,9 @@ def predict_runtime(size, saved_model=None):
         return model.predict(shape)
 
     defaults_path = os.path.join(os.path.realpath(__file__), 'defaults')
-    x_train = pd.read_csv(os.path.join(defaults_path, 'dataset_sizes.csv'))
-    y_train = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'))
-    model = RuntimePredictor(3, x_train, y_train)
+    dataset_sizes = pd.read_csv(os.path.join(defaults_path, 'dataset_sizes.csv'))
+    runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'))
+    model = RuntimePredictor(3, dataset_sizes, runtime_matrix)
     with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
         pickle.dump(model, file)
 
@@ -74,7 +74,7 @@ class RuntimePredictor:
         n_models (int): number of model settings
         models (list):  list of scikit-learn LinearRegression models
     """
-    def __init__(self, degree, sizes, runtimes):
+    def __init__(self, degree, sizes, runtimes, indices):
         self.degree = degree
         self.n_models = runtimes.shape[1]
         self.models = (None, ) * self.n_models
@@ -83,18 +83,18 @@ class RuntimePredictor:
     def fit(self, sizes, runtimes):
         """Fit polynomial regression on pre-recorded runtimes on datasets."""
         assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
-        x_raw = np.concatenate((sizes, np.log(sizes[:, 0]).reshape(-1, 1)), axis=1)
-        x_train = PolynomialFeatures(self.degree).fit_transform(x_raw)
+        sizes_log = np.concatenate((sizes, np.log(sizes[:, 0]).reshape(-1, 1)), axis=1)
+        sizes_train = PolynomialFeatures(self.degree).fit_transform(sizes_log)
 
         # train independent regression model to predict each runtime of each model setting
         for i in range(self.n_models):
-            y_train = runtimes[:, i]
-            self.models[i] = LinearRegression().fit(x_train, y_train)
+            runtime = runtimes[:, i]
+            self.models[i] = LinearRegression().fit(sizes_train, runtime)
 
     def predict(self, size):
         """Predict runtime of all model settings on a dataset of given size."""
-        x_test = np.append(size, np.log(size[0]))
+        size_test = np.append(size, np.log(size[0]))
         predictions = np.zeros(self.n_models)
         for i in range(self.n_models):
-            predictions[i] = self.models[i].predict(x_test)
+            predictions[i] = self.models[i].predict(size_test)
         return predictions
