@@ -185,7 +185,7 @@ def merge_rows(save_dir):
         return
 
     # find files to concatenate (all .csv files; may contain previously merged results)
-    files = [file for file in os.listdir(save_dir) if file.endswith('.csv')]
+    files = [file for file in os.listdir(save_dir) if file.endswith('.csv') and not 'sizes' in file]
     em, rm = 'error_matrix.csv', 'runtime_matrix.csv'
     headers, ids, error_matrix_rows, runtime_matrix_rows = None, [], (), ()
 
@@ -225,10 +225,10 @@ def merge_rows(save_dir):
     dataset_ids, sizes = [], []
     for line in lines:
         if 'Size' in line:
-            ids = [int(n) for n in re.findall(r'ID=(\d+)', line)]
+            log_ids = [int(n) for n in re.findall(r'ID=(\d+)', line)]
             size = [eval(n) for n in re.findall(r'Size=\((\d+, \d+)\)', line)]
-            if len(ids) == 1 and len(size) == 1:
-                dataset_ids.append(ids[0])
+            if len(log_ids) == 1 and len(size) == 1:
+                dataset_ids.append(log_ids[0])
                 sizes.append(size[0])
 
     # save results
