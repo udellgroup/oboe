@@ -2,13 +2,14 @@
 Miscellaneous helper functions.
 """
 
-import json
-import numpy as np
-import pandas as pd
-import pkg_resources
 import inspect
 import itertools
+import json
+import numpy as np
 import os
+import pandas as pd
+import pkg_resources
+import re
 import sys
 from math import isclose
 from sklearn.metrics import mean_squared_error
@@ -218,9 +219,22 @@ def merge_rows(save_dir):
             if len(error_matrix_rows) % 50 == 0:
                 print('Merging {} files...'.format(len(error_matrix_rows)))
 
+    # save dataset sizes
+    with open(os.path.join(save_dir, 'log.txt'), 'r') as file:
+        lines = file.readlines()
+    dataset_ids, sizes = [], []
+    for line in lines:
+        if 'Size' in line:
+            ids = [int(n) for n in re.findall(r'ID=(\d+)', line)]
+            size = [eval(n) for n in re.findall(r'Size=\((\d+, \d+)\)', line)]
+            if len(ids) == 1 and len(size) == 1:
+                dataset_ids.append(ids[0])
+                sizes.append(size[0])
+
     # save results
     pd.DataFrame(np.vstack(error_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, em))
     pd.DataFrame(np.vstack(runtime_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, rm))
+    pd.DataFrame(np.vstack(sizes), index=dataset_ids).to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))
 
 
 if __name__ == '__main__':
