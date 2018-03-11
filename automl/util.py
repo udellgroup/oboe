@@ -185,7 +185,7 @@ def merge_rows(save_dir):
         return
 
     # find files to concatenate (all .csv files; may contain previously merged results)
-    files = [file for file in os.listdir(save_dir) if file.endswith('.csv') and not 'sizes' in file]
+    files = [file for file in os.listdir(save_dir) if file.endswith('.csv') and 'sizes' not in file]
     em, rm = 'error_matrix.csv', 'runtime_matrix.csv'
     headers, ids, error_matrix_rows, runtime_matrix_rows = None, [], (), ()
 
@@ -208,7 +208,7 @@ def merge_rows(save_dir):
         else:
             assert set(headers) == set(list(dataframe)), "All results must share same headers."
         if np.isnan(dataframe.values).any():
-            # if values contain NaNs, generations has not yet finished
+            # if values contain NaNs, generation has not yet finished
             pass
         else:
             permutation = [headers.index(h) for h in list(dataframe)]

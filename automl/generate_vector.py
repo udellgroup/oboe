@@ -57,13 +57,14 @@ def main(args):
     results = np.full((2, len(settings)), np.nan)
 
     # generate error matrix entries, i.e. compute k-fold cross validation error
+    log_file = [file for file in os.listdir(args.save_dir) if file.startswith('log')][0]
     for i, setting in enumerate(settings):
         model = Model(args.p_type, setting['algorithm'], setting['hyperparameters'], args.verbose)
         start = time.time()
         try:
             cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
         except (ZeroDivisionError, KeyError, TypeError, ValueError) as e:
-            with open(os.path.join(args.save_dir, 'log.txt'), 'a') as log:
+            with open(os.path.join(args.save_dir, log_file), 'a') as log:
                 line = '\nID={}, model={}, {}'.format(dataset_id, setting, e)
                 log.write(line)
         results[:, i] = np.array([cv_errors.mean(), time.time() - start])
@@ -74,7 +75,7 @@ def main(args):
     elapsed = time.time() - t0
     line = '\nID={}, Size={}, Time={:.0f}s, Avg. Error={:.3f}'\
            .format(dataset_id, dataset.shape, elapsed, results[0, :].mean())
-    with open(os.path.join(args.save_dir, 'log.txt'), 'a') as log:
+    with open(os.path.join(args.save_dir, log_file), 'a') as log:
         log.write(line)
     print(line)
 
