@@ -2,6 +2,7 @@
 Miscellaneous helper functions.
 """
 
+# import openml
 import inspect
 import itertools
 import json
@@ -200,6 +201,7 @@ def merge_rows(save_dir):
         runtime_matrix_rows += (runtimes.values, )
 
     # concatenate new results
+    # TODO: only load files corresponding to completed files in log.txt
     for file in files:
         file_path = os.path.join(save_dir, file)
         dataframe = pd.read_csv(file_path, index_col=0)
@@ -219,6 +221,11 @@ def merge_rows(save_dir):
             if len(error_matrix_rows) % 50 == 0:
                 print('Merging {} files...'.format(len(error_matrix_rows)))
 
+    # get dataset sizes
+    # openml_datasets = openml.datasets.list_datasets()
+    # openml_datasets = pd.DataFrame.from_dict(openml_datasets, orient='index')
+    # dataset_sizes = openml_datasets[['NumberOfInstances', 'NumberOfFeatures']]
+
     # save dataset sizes
     with open(os.path.join(save_dir, 'log.txt'), 'r') as file:
         lines = file.readlines()
@@ -234,8 +241,9 @@ def merge_rows(save_dir):
     # save results
     pd.DataFrame(np.vstack(error_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, em))
     pd.DataFrame(np.vstack(runtime_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, rm))
-    pd.DataFrame(np.vstack(sizes), index=dataset_ids).to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))
+    pd.DataFrame(np.vstack(sizes), index=dataset_ids).to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))    
+    # dataset_sizes.to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))
 
-
+    
 if __name__ == '__main__':
     merge_rows(sys.argv[1])
