@@ -9,8 +9,8 @@ import pkg_resources
 import subprocess
 import linalg
 import util
-import convex_opt
-import convex_opt2
+import convex_opt_c
+import convex_opt_s as convex_opt2
 import openml
 from model import Model, Ensemble
 from pathos.multiprocessing import ProcessingPool as Pool
