@@ -95,27 +95,30 @@ class AutoLearner:
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
-#            error_matrix_with_ind = np.concatenate((np.array([self.error_index]).T, self.error_matrix), axis=1)
-#            runtime_matrix_with_ind = np.concatenate((np.array([self.runtime_index]).T, self.runtime_matrix), axis=1)
+            
+#            #runtime prediction using convex_opt.py
+#            log_runtime_matrix = np.log(self.runtime_matrix)
+#            log_runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, log_runtime_matrix, x_train, self.runtime_index)
+#            runtime_predict = np.exp(log_runtime_predict)
 
-            log_runtime_matrix = np.log(self.runtime_matrix)
-            log_runtime_predict = convex_opt.runtime_prediction_via_poly_fitting(self.dataset_sizes, 3, log_runtime_matrix, x_train, self.runtime_index)
-            runtime_predict = np.exp(log_runtime_predict)
+            #runtime prediction using convex_opt2.py
+            runtime_predict = convex_opt2.predict_runtime(x_train.shape)
+
             if self.transform_error_matrix:
                 error_matrix_transformed = convex_opt.inv_sigmoid(convex_opt.truncate(self.error_matrix))
                 if self.cvxopt_package == 'cvxpy':
                     known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed, n_cores=self.n_cores)
                 elif self.cvxopt_package == 'scipy':
                     X,Y,Vt = linalg.pca(error_matrix_transformed, threshold=0.03)
-                    v_opt = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
-                    known_indices = np.where(np.array(v_opt.x)>0.8)[0]
+                    v_opt_x = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
+                    known_indices = np.where(v_opt_x>0.8)[0]
             else:
                 if self.cvxopt_package == 'cvxpy':
                     known_indices = convex_opt.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=self.n_cores)
                 elif self.cvxopt_package == 'scipy':
                     X,Y,Vt = linalg.pca(self.error_matrix, threshold=0.03)
-                    v_opt = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
-                    known_indices = np.where(np.array(v_opt.x)>0.8)[0]
+                    v_opt_x = convex_opt2.solve(runtime_predict, self.runtime_limit, Y)
+                    known_indices = np.where(v_opt_x>0.8)[0]
 
         if self.debug_mode:
             self.num_known_indices = len(known_indices)

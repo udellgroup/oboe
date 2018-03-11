@@ -7,6 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 import pickle
+import openml
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
@@ -38,11 +39,12 @@ def solve(t_predicted, t_max, Y):
     return v_opt.x
 
 
-def predict_runtime(size, saved_model=None):
+def predict_runtime(size, log=True, saved_model=None):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
         size (np.ndarray): 1-d array specifying dataset size as [n_rows, n_columns]
+        log (Boolean): whether to take logarithms of runtime when fitting.
         saved_model (str): path to pre-trained model; defaults to None
     Returns:
         np.ndarray:        1-d array of predicted runtimes
@@ -55,14 +57,28 @@ def predict_runtime(size, saved_model=None):
             model = pickle.load(file)
         return model.predict(shape)
 
-    defaults_path = os.path.join(os.path.realpath(__file__), 'defaults')
-    dataset_sizes = pd.read_csv(os.path.join(defaults_path, 'dataset_sizes.csv'))
-    runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'))
-    model = RuntimePredictor(3, dataset_sizes, runtime_matrix)
+    defaults_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'defaults')
+    try:
+        dataset_sizes = pd.read_csv(os.path.join(defaults_path, 'dataset_sizes.csv'), index_col=0)
+        sizes_index = np.array(dataset_sizes.index)
+        sizes = dataset_sizes.values
+    except FileNotFoundError:
+        sizes_index = []
+        sizes = []
+    runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
+    runtimes_index = np.array(runtime_matrix.index)
+    runtimes = runtime_matrix.values
+    if log:
+        model = RuntimePredictor(3, sizes, sizes_index, np.log(runtimes), runtimes_index)
+    else:
+        model = RuntimePredictor(3, sizes, sizes_index, runtimes, runtimes_index)
     with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
         pickle.dump(model, file)
 
-    return model.predict(shape)
+    if log:
+        return np.exp(model.predict(shape))
+    else:
+        return model.predict(shape)
 
 
 class RuntimePredictor:
@@ -74,27 +90,45 @@ class RuntimePredictor:
         n_models (int): number of model settings
         models (list):  list of scikit-learn LinearRegression models
     """
-    def __init__(self, degree, sizes, runtimes, indices):
+    def __init__(self, degree, sizes, sizes_index, runtimes, runtimes_index):
         self.degree = degree
         self.n_models = runtimes.shape[1]
-        self.models = (None, ) * self.n_models
-        self.fit(sizes, runtimes)
+        self.models = [None, ] * self.n_models
+        self.fit(sizes, sizes_index, runtimes, runtimes_index)
 
-    def fit(self, sizes, runtimes):
+    def fit(self, sizes, sizes_index, runtimes, runtimes_index):
         """Fit polynomial regression on pre-recorded runtimes on datasets."""
-        assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
-        sizes_log = np.concatenate((sizes, np.log(sizes[:, 0]).reshape(-1, 1)), axis=1)
-        sizes_train = PolynomialFeatures(self.degree).fit_transform(sizes_log)
+#        assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
+        for i in set(runtimes_index).difference(set(sizes_index)):
+            dataset=openml.datasets.get_dataset(i)
+            data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,return_categorical_indicator=True)
+            if sizes == []:
+                sizes = np.array([data_numeric.shape])
+                sizes_index = np.array(i)
+            else:
+                sizes = np.concatenate((sizes, np.array([data_numeric.shape])))
+                sizes_index = np.append(sizes_index, i)
+
+        sizes_train = np.array([sizes[list(sizes_index).index(i), :] for i in runtimes_index])
+        sizes_log = np.concatenate((sizes_train, np.log(sizes_train[:, 0]).reshape(-1, 1)), axis=1)
+        sizes_train_poly = PolynomialFeatures(self.degree).fit_transform(sizes_log)
 
         # train independent regression model to predict each runtime of each model setting
         for i in range(self.n_models):
             runtime = runtimes[:, i]
-            self.models[i] = LinearRegression().fit(sizes_train, runtime)
+            self.models[i] = LinearRegression().fit(sizes_train_poly, runtime)
 
     def predict(self, size):
-        """Predict runtime of all model settings on a dataset of given size."""
+        """Predict runtime of all model settings on a dataset of given size.
+        
+        Args:
+            size(np.array): Size of the dataset to fit runtime onto.
+        Returns:
+            predictions (np.array): The predicted runtime.
+        """
         size_test = np.append(size, np.log(size[0]))
+        size_test_poly = PolynomialFeatures(self.degree).fit_transform([size_test])
         predictions = np.zeros(self.n_models)
         for i in range(self.n_models):
-            predictions[i] = self.models[i].predict(size_test)
+            predictions[i] = self.models[i].predict(size_test_poly)[0]
         return predictions
