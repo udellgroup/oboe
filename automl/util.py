@@ -2,14 +2,15 @@
 Miscellaneous helper functions.
 """
 
-import json
-import openml
-import numpy as np
-import pandas as pd
-import pkg_resources
+# import openml
 import inspect
 import itertools
+import json
+import numpy as np
 import os
+import pandas as pd
+import pkg_resources
+import re
 import sys
 from math import isclose
 from sklearn.metrics import mean_squared_error
@@ -45,7 +46,7 @@ ALGORITHMS_C = dict(zip(CLS['algorithms'], list(map(lambda name: eval(name), CLS
 ALGORITHMS_R = dict(zip(REG['algorithms'], list(map(lambda name: eval(name), REG['algorithms']))))
 
 DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regression': ALGORITHMS_R},
-            'hyperparameters': {'classification': CLS['hyperparameters'], 'regression': REG['hyperparameters']}}
+            'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
 
 
 def error(y_observed, y_predicted, p_type):
@@ -185,7 +186,7 @@ def merge_rows(save_dir):
         return
 
     # find files to concatenate (all .csv files; may contain previously merged results)
-    files = [file for file in os.listdir(save_dir) if file.endswith('.csv')]
+    files = [file for file in os.listdir(save_dir) if file.endswith('.csv') and 'sizes' not in file]
     em, rm = 'error_matrix.csv', 'runtime_matrix.csv'
     headers, ids, error_matrix_rows, runtime_matrix_rows = None, [], (), ()
 
@@ -209,7 +210,7 @@ def merge_rows(save_dir):
         else:
             assert set(headers) == set(list(dataframe)), "All results must share same headers."
         if np.isnan(dataframe.values).any():
-            # if values contain NaNs, generations has not yet finished
+            # if values contain NaNs, generation has not yet finished
             pass
         else:
             permutation = [headers.index(h) for h in list(dataframe)]
@@ -221,15 +222,28 @@ def merge_rows(save_dir):
                 print('Merging {} files...'.format(len(error_matrix_rows)))
 
     # get dataset sizes
-    openml_datasets = openml.datasets.list_datasets()
-    openml_datasets = pd.DataFrame.from_dict(openml_datasets, orient='index')
-    dataset_sizes = openml_datasets[['NumberOfInstances', 'NumberOfFeatures']]
+    # openml_datasets = openml.datasets.list_datasets()
+    # openml_datasets = pd.DataFrame.from_dict(openml_datasets, orient='index')
+    # dataset_sizes = openml_datasets[['NumberOfInstances', 'NumberOfFeatures']]
+
+    # save dataset sizes
+    with open(os.path.join(save_dir, 'log.txt'), 'r') as file:
+        lines = file.readlines()
+    dataset_ids, sizes = [], []
+    for line in lines:
+        if 'Size' in line:
+            log_ids = [int(n) for n in re.findall(r'ID=(\d+)', line)]
+            size = [eval(n) for n in re.findall(r'Size=\((\d+, \d+)\)', line)]
+            if len(log_ids) == 1 and len(size) == 1:
+                dataset_ids.append(log_ids[0])
+                sizes.append(size[0])
 
     # save results
     pd.DataFrame(np.vstack(error_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, em))
     pd.DataFrame(np.vstack(runtime_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, rm))
-    dataset_sizes.to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))
+    pd.DataFrame(np.vstack(sizes), index=dataset_ids).to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))    
+    # dataset_sizes.to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))
 
-
+    
 if __name__ == '__main__':
     merge_rows(sys.argv[1])

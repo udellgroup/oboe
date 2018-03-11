@@ -20,13 +20,13 @@ class AutoLearner:
     """An object representing an automatically tuned machine learning model.
 
     Attributes:
-        p_type (str): Problem type. One of {'classification', 'regression'}.
-        algorithms (list): A list of algorithm types to be considered, in strings. (e.g. ['KNN', 'lSVM', 'kSVM']).
-        hyperparameters (dict): A nested dict of hyperparameters to be considered; see above for example.
-        n_cores (int): Maximum number of cores over which to parallelize (None means no limit).
-        verbose (bool): Whether or not to generate print statements when a model finishes fitting.
-        selection_method (str): The method to select entries to actually compute.
-        stacking_alg (str): Algorithm type to use for stacked learner.
+        p_type (str):                  Problem type. One of {'classification', 'regression'}.
+        algorithms (list):             A list of algorithm types to be considered, in strings.
+                                       (e.g. ['KNN', 'lSVM', 'kSVM']).
+        hyperparameters (dict):        A nested dict of hyperparameters to be considered; see above for example.
+        n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
+        verbose (bool):                Whether or not to generate print statements when a model finishes fitting.
+        stacking_alg (str):            Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False, selection_method='qr', runtime_limit=None, cvxopt_package='cvxpy', transform_error_matrix=False, bayes_opt=False, debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):

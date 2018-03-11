@@ -229,6 +229,3 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
     
     v_indices_selected = np.where(v_sol>relaxation_threshold)[0]
     return v_indices_selected
-
-
-

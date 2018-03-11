@@ -68,6 +68,7 @@ if [ "${mode}" == "generate" ]
 then
   time=`date +%Y%m%d%H%M`
   mkdir -p ${SAVE_DIR}/${time}
+  echo "Error matrix generation started at ${time}" >> ${SAVE_DIR}/${time}/log_${time}.txt
 
   ls ${DATA_DIR}/*.csv | xargs -i --max-procs=${MAX_PROCS} bash -c \
   "echo {}; python ${DIR}/generate_vector.py '${P_TYPE}' {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${time} --error_matrix=${ERROR_MATRIX}"
