@@ -3,6 +3,7 @@ Miscellaneous helper functions.
 """
 
 import json
+import openml
 import numpy as np
 import pandas as pd
 import pkg_resources
@@ -219,9 +220,15 @@ def merge_rows(save_dir):
             if len(error_matrix_rows) % 50 == 0:
                 print('Merging {} files...'.format(len(error_matrix_rows)))
 
+    # get dataset sizes
+    openml_datasets = openml.datasets.list_datasets()
+    openml_datasets = pd.DataFrame.from_dict(openml_datasets, orient='index')
+    dataset_sizes = openml_datasets[['NumberOfInstances', 'NumberOfFeatures']]
+
     # save results
     pd.DataFrame(np.vstack(error_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, em))
     pd.DataFrame(np.vstack(runtime_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, rm))
+    dataset_sizes.to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))
 
 
 if __name__ == '__main__':
