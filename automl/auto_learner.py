@@ -78,7 +78,7 @@ class AutoLearner:
             self.bayes_opt = bayes_opt
             self.debug_mode = debug_mode
 
-        self.ensemble = Ensemble(self.p_type, stacking_alg, **stacking_hyperparams)
+        self.ensemble = Ensemble(self.p_type, stacking_alg, stacking_hyperparams)
         self.optimized_settings = []
         self.new_row = None
 
@@ -136,7 +136,7 @@ class AutoLearner:
 
         # TODO: Fit ensemble candidates (?)
         
-        n_models = 3
+        n_models = int(len(known_indices) / 2)
 
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                      self.column_headings[i]['hyperparameters'], verbose=self.verbose)
