@@ -107,7 +107,7 @@ class AutoLearner:
             elif self.cvxopt_package == 'scipy':
                 runtime_predict = convex_opt_s.predict_runtime(x_train.shape)
                 X,Y,Vt = linalg.pca(self.error_matrix, threshold=0.03)
-                v_opt_x = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y)
+                v_opt_x = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y, n_cores=self.n_cores)
                 known_indices = np.where(v_opt_x>0.8)[0]
 
         if self.debug_mode:
