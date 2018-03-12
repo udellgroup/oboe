@@ -116,7 +116,8 @@ class AutoLearner:
             self.num_pivots_one_percent = len(pivot_columns_one_percent)
             self.num_overlap_with_pivots = len(set(known_indices).intersection(set(pivot_columns_one_percent)))
         
-        print('Sampling {} entries of new row...'.format(len(known_indices)))
+        if self.verbose:
+        	print('Sampling {} entries of new row...'.format(len(known_indices)))
         pool1 = mp.Pool(self.n_cores)
         sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                self.column_headings[i]['hyperparameters'], verbose=self.verbose)
