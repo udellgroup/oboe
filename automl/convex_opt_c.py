@@ -13,7 +13,7 @@ from scipy.linalg import qr
 import glob
 from os.path import basename
 import os
-import multiprocessing
+from multiprocessing import cpu_count
 
 #import scikit-learn modules
 from sklearn.preprocessing import PolynomialFeatures
@@ -190,7 +190,7 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
     """
     num_models = error_matrix.shape[1]
     if n_cores == None:
-        n_cores = multiprocessing.cpu_count()
+        n_cores = cpu_count()
     
     assert threshold>0 and threshold<1, "The threshold for truncating singular values should be a float between 0 and 1."
     assert relaxation_threshold>0 and relaxation_threshold<1, "The threshold for converting relaxed integer programming problem back to the integer version should be a float between 0 and 1."
