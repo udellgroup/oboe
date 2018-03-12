@@ -29,7 +29,7 @@ class AutoLearner:
         stacking_alg (str):            Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
-    def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False, selection_method='qr', runtime_limit=None, cvxopt_package='cvxpy', transform_error_matrix=False, bayes_opt=False, debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
+    def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False, selection_method='qr', runtime_limit=None, cvxopt_package='cvxpy', scalarization='D', transform_error_matrix=False, bayes_opt=False, debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
 
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
         compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
@@ -46,6 +46,7 @@ class AutoLearner:
         self.transform_error_matrix = transform_error_matrix
         self.n_cores = n_cores
         self.cvxopt_package = cvxopt_package
+        self.scalarization = scalarization
 
 #        if len(new) > 0:
 #            # if selected hyperparameters contain model configurations not included in default
@@ -107,7 +108,7 @@ class AutoLearner:
             elif self.cvxopt_package == 'scipy':
                 runtime_predict = convex_opt_s.predict_runtime(x_train.shape)
                 X,Y,Vt = linalg.pca(self.error_matrix, threshold=0.03)
-                v_opt_x = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y, n_cores=self.n_cores)
+                v_opt_x = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y, scalarization=self.scalarization, n_cores=self.n_cores)
                 known_indices = np.where(v_opt_x>0.8)[0]
 
         if self.debug_mode:
