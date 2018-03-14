@@ -69,7 +69,7 @@ class Model:
         """
         return self.model.predict(x_test)
 
-    def kfold_fit_validate(self, x_train, y_train, n_folds, return_models=False):
+    def kfold_fit_validate(self, x_train, y_train, n_folds):
         """Performs k-fold cross validation on a training dataset. Note that this is the function used to fill entries
         of the error matrix.
 
@@ -87,18 +87,15 @@ class Model:
         cv_errors = np.empty(n_folds)
         kf = KFold(n_folds, shuffle=True, random_state=RANDOM_STATE)
 
-        # return all fitted model objects (to add to ensemble)
-        models = []
         for i, (train_idx, test_idx) in enumerate(kf.split(x_train)):
             x_tr = x_train[train_idx, :]
             y_tr = y_train[train_idx]
             x_te = x_train[test_idx, :]
             y_te = y_train[test_idx]
 
-            model = Model(self.p_type, self.algorithm, self.hyperparameters, False)
+            model = self.instantiate()
             if len(np.unique(y_tr)) > 1:
                 model.fit(x_tr, y_tr)
-                models.append(model)
                 y_predicted[test_idx] = model.predict(x_te)
             else:
                 y_predicted[test_idx] = y_tr[0]
@@ -108,10 +105,7 @@ class Model:
         if self.verbose:
             print("{} {} complete.".format(self.algorithm, self.hyperparameters))
 
-        if return_models:
-            return cv_errors, y_predicted, models
-        else:
-            return cv_errors, y_predicted
+        return cv_errors, y_predicted
 
     def bayesian_optimize(self):
         """Conducts Bayesian optimization of hyperparameters.
