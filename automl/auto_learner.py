@@ -29,10 +29,9 @@ class AutoLearner:
         stacking_alg (str):            Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
-
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
                  selection_method='qr', runtime_limit=None, cvxopt_package='cvxpy', transform_error_matrix=False,
-                 bayes_opt=False, debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
+                 scalarization='D', bayes_opt=False, debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
 
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
         compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
