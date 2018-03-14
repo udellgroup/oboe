@@ -154,7 +154,7 @@ class AutoLearner:
 
         # TODO: Fit ensemble candidates (?)
         
-        n_models = int(len(known_indices) / 2)
+        n_models = 5
 
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                      self.column_headings[i]['hyperparameters'], verbose=self.verbose)
