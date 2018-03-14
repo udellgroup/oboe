@@ -8,12 +8,13 @@ import os
 import pandas as pd
 import pickle
 import openml
+from multiprocessing import cpu_count
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 
 
-def solve(t_predicted, t_max, Y):
+def solve(t_predicted, t_max, Y, n_cores=None):
     """Solve the following optimization problem:
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
@@ -22,15 +23,19 @@ def solve(t_predicted, t_max, Y):
          t_predicted (np.ndarray): 1-d array specifying predicted runtime for each model setting
          t_max (float):            maximum runtime of sampled model
          Y (np.ndarray):           matrix representing latent variable weights of error matrix
+         n_cores (int):            The number of cores as resource limit.
     Returns:
         np.ndarray:                optimal vector v (not truncated to binary values)
     """
+    if n_cores == None:
+        n_cores = cpu_count()
+    
     def objective(v):
         sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
         return -1 * sign * log_det
 
     def constraint(v):
-        return t_max - t_predicted @ v
+        return t_max * n_cores - t_predicted @ v
 
     n = len(t_predicted)
     v0 = np.full((n, ), 0.5)
@@ -102,7 +107,7 @@ class RuntimePredictor:
         for i in set(runtimes_index).difference(set(sizes_index)):
             dataset=openml.datasets.get_dataset(i)
             data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,return_categorical_indicator=True)
-            if sizes == []:
+            if len(sizes) == 0:
                 sizes = np.array([data_numeric.shape])
                 sizes_index = np.array(i)
             else:
