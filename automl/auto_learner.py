@@ -127,13 +127,14 @@ class AutoLearner:
         sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                          for i in known_indices]
-        sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5])
+        sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5, True])
                                for m in sample_models]
         pool1.close()
         pool1.join()
         for i, error in enumerate(sample_model_errors):
             self.new_row[:, known_indices[i]] = error.get()[0].mean()
-            # TODO: add predictions to second layer matrix?
+            for model in error.get()[2]:
+                self.ensemble.add_base_learner(model)
         self.new_row = linalg.impute(self.error_matrix, self.new_row, known_indices)
 
         # Add new row to error matrix at the end (might be incorrect?)

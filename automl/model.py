@@ -14,12 +14,12 @@ class Model:
     """An object representing a machine learning model.
 
     Attributes:
-        type (str): Either 'classification' or 'regression'.
-        algorithm (str): Algorithm type (e.g. 'KNN').
+        type (str):             Either 'classification' or 'regression'.
+        algorithm (str):        Algorithm type (e.g. 'KNN').
         hyperparameters (dict): Hyperparameters (e.g. {'n_neighbors': 5}).
-        model (object): A scikit-learn object for the model.
-        fitted (bool): Whether or not the model has been trained.
-        verbose (bool): Whether or not to generate print statements when fitting complete.
+        model (object):         A scikit-learn object for the model.
+        fitted (bool):          Whether or not the model has been trained.
+        verbose (bool):         Whether or not to generate print statements when fitting complete.
     """
 
     def __init__(self, p_type, algorithm, hyperparameters={}, verbose=False):
@@ -69,14 +69,15 @@ class Model:
         """
         return self.model.predict(x_test)
 
-    def kfold_fit_validate(self, x_train, y_train, n_folds):
+    def kfold_fit_validate(self, x_train, y_train, n_folds, return_models=False):
         """Performs k-fold cross validation on a training dataset. Note that this is the function used to fill entries
         of the error matrix.
 
         Args:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
-            n_folds (int): Number of folds to use for cross validation.
+            n_folds (int):        Number of folds to use for cross validation.
+            return_models (bool): Whether to return the scikit-learn model fitted on each training fold.
 
         Returns:
             float: Mean of k-fold cross validation error.
@@ -86,15 +87,18 @@ class Model:
         cv_errors = np.empty(n_folds)
         kf = KFold(n_folds, shuffle=True, random_state=RANDOM_STATE)
 
+        # return all fitted model objects (to add to ensemble)
+        models = []
         for i, (train_idx, test_idx) in enumerate(kf.split(x_train)):
             x_tr = x_train[train_idx, :]
             y_tr = y_train[train_idx]
             x_te = x_train[test_idx, :]
             y_te = y_train[test_idx]
 
-            model = self.instantiate()
+            model = Model(self.p_type, self.algorithm, self.hyperparameters, False)
             if len(np.unique(y_tr)) > 1:
                 model.fit(x_tr, y_tr)
+                models.append(model)
                 y_predicted[test_idx] = model.predict(x_te)
             else:
                 y_predicted[test_idx] = y_tr[0]
@@ -104,7 +108,10 @@ class Model:
         if self.verbose:
             print("{} {} complete.".format(self.algorithm, self.hyperparameters))
 
-        return cv_errors, y_predicted
+        if return_models:
+            return cv_errors, y_predicted, models
+        else:
+            return cv_errors, y_predicted
 
     def bayesian_optimize(self):
         """Conducts Bayesian optimization of hyperparameters.
