@@ -32,7 +32,8 @@ class AutoLearner:
 
     def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
                  selection_method='qr', runtime_limit=None, cvxopt_package='cvxpy', transform_error_matrix=False,
-                 scalarization='D', bayes_opt=False, debug_mode=True, stacking_alg='Logit', **stacking_hyperparams):
+                 scalarization='D', bayes_opt=False, debug_mode=True, stacking_alg='Logit', giant_ensemble=False,
+                 **stacking_hyperparams):
 
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to actually \
         compute must be either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
@@ -50,6 +51,7 @@ class AutoLearner:
         self.n_cores = n_cores
         self.cvxopt_package = cvxopt_package
         self.scalarization = scalarization
+        self.giant_ensemble = giant_ensemble
 
 #        if len(new) > 0:
 #            # if selected hyperparameters contain model configurations not included in default
@@ -127,14 +129,15 @@ class AutoLearner:
         sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                self.column_headings[i]['hyperparameters'], verbose=self.verbose)
                          for i in known_indices]
-        sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5, True])
+        sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5, self.giant_ensemble])
                                for m in sample_models]
         pool1.close()
         pool1.join()
         for i, error in enumerate(sample_model_errors):
             self.new_row[:, known_indices[i]] = error.get()[0].mean()
-            for model in error.get()[2]:
-                self.ensemble.add_base_learner(model)
+            if self.giant_ensemble:
+                for model in error.get()[2]:
+                    self.ensemble.add_base_learner(model)
         self.new_row = linalg.impute(self.error_matrix, self.new_row, known_indices)
 
         # Add new row to error matrix at the end (might be incorrect?)
