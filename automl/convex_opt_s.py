@@ -112,7 +112,7 @@ class RuntimePredictor:
         for i in set(runtimes_index).difference(set(sizes_index)):
             dataset=openml.datasets.get_dataset(i)
             data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,return_categorical_indicator=True)
-            if sizes == []:
+            if len(sizes) == 0:
                 sizes = np.array([data_numeric.shape])
                 sizes_index = np.array(i)
             else:
