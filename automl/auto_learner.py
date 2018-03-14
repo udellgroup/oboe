@@ -30,7 +30,7 @@ class AutoLearner:
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
 
-    def __init__(self, p_type, algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
+    def __init__(self, p_type, error_matrix='default', runtime_matrix='default', algorithms=None, hyperparameters=None, n_cores=None, verbose=False,
                  selection_method='qr', runtime_limit=None, cvxopt_package='cvxpy', transform_error_matrix=False,
                  scalarization='D', bayes_opt=False, debug_mode=True, stacking_alg='Logit', giant_ensemble=False,
                  **stacking_hyperparams):
@@ -65,10 +65,17 @@ class AutoLearner:
 #        else:
         if True:
             # use default error matrix (or subset of)
-            error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
-            runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
-            default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
-            default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
+            if error_matrix == 'default':
+                error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
+                default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
+            else:
+                default_error_matrix == error_matrix
+            if runtime_matrix == 'default':
+                runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
+                default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
+            else:
+                default_runtime_matrix = runtime_matrix
+            
             assert set(default_error_matrix.index.tolist()) == set(default_runtime_matrix.index.tolist()), "Indices of error and runtime matrices must match."
             column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
             selected_indices = np.full(len(column_headings), True)
