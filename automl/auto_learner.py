@@ -65,15 +65,17 @@ class AutoLearner:
 #        else:
         if True:
             # use default error matrix (or subset of)
-            if error_matrix == 'default':
-                error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
-                default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
-            else:
+            if type(error_matrix) == str:
+                if error_matrix == 'default':
+                    error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
+                    default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
+            elif type(error_matrix) == pd.core.frame.DataFrame:
                 default_error_matrix == error_matrix
-            if runtime_matrix == 'default':
-                runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
-                default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
-            else:
+            if type(runtime_matrix) == str:
+                if runtime_matrix == 'default':
+                    runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
+                    default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
+            elif type(runtime_matrix) == pd.core.frame.DataFrame:
                 default_runtime_matrix = runtime_matrix
             
             assert set(default_error_matrix.index.tolist()) == set(default_runtime_matrix.index.tolist()), "Indices of error and runtime matrices must match."
