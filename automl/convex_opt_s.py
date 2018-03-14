@@ -14,7 +14,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 
 
-def solve(t_predicted, t_max, Y, n_cores=None):
+def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
     """Solve the following optimization problem:
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
@@ -23,6 +23,7 @@ def solve(t_predicted, t_max, Y, n_cores=None):
          t_predicted (np.ndarray): 1-d array specifying predicted runtime for each model setting
          t_max (float):            maximum runtime of sampled model
          Y (np.ndarray):           matrix representing latent variable weights of error matrix
+         scalarization (str):      The scalarization method in experimental design.
          n_cores (int):            The number of cores as resource limit.
     Returns:
         np.ndarray:                optimal vector v (not truncated to binary values)
@@ -30,9 +31,13 @@ def solve(t_predicted, t_max, Y, n_cores=None):
     if n_cores == None:
         n_cores = cpu_count()
     
-    def objective(v):
-        sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
-        return -1 * sign * log_det
+    if scalarization == 'D':
+        def objective(v):
+            sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
+            return -1 * sign * log_det
+    elif scalarization == 'A':
+        def objective(v):
+            return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
 
     def constraint(v):
         return t_max * n_cores - t_predicted @ v
