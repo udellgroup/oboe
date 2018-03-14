@@ -70,7 +70,7 @@ class AutoLearner:
                     error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
                     default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
             elif type(error_matrix) == pd.core.frame.DataFrame:
-                default_error_matrix == error_matrix
+                default_error_matrix = error_matrix
             if type(runtime_matrix) == str:
                 if runtime_matrix == 'default':
                     runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
