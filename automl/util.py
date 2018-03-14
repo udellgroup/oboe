@@ -63,6 +63,7 @@ def error(y_observed, y_predicted, p_type):
     Returns:
         float: Error metric.
     """
+    # TODO: Change error metric to multiclass AUC
     assert p_type in ['classification', 'regression'], "Please specify a valid type."
 
     if p_type == 'classification':
