@@ -49,16 +49,16 @@ DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regr
             'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
 
 
-def error(y_observed, y_predicted, p_type):
+def error(y_true, y_predicted, p_type):
     """Compute error metric for the model; varies based on classification/regression and algorithm type.
     BER (Balanced Error Rate): For classification.
                               1/n * sum (0.5*(true positives/predicted positives + true negatives/predicted negatives))
     MSE (Mean Squared Error): For regression. 1/n * sum(||y_pred - y_obs||^2).
 
     Args:
-        y_observed (np.ndarray): Observed labels.
+        y_true (np.ndarray):      Observed labels.
         y_predicted (np.ndarray): Predicted labels.
-        p_type (str): Type of problem. One of {'classification', 'regression'}
+        p_type (str):             Type of problem. One of {'classification', 'regression'}
 
     Returns:
         float: Error metric.
@@ -68,16 +68,16 @@ def error(y_observed, y_predicted, p_type):
     if p_type == 'classification':
         errors = []
         epsilon = 1e-15
-        for i in np.unique(y_observed):
-            tp = ((y_observed == i) & (y_predicted == i)).sum()
-            tn = ((y_observed != i) & (y_predicted != i)).sum()
-            fp = ((y_observed != i) & (y_predicted == i)).sum()
-            fn = ((y_observed == i) & (y_predicted != i)).sum()
+        for i in np.unique(y_true):
+            tp = ((y_true == i) & (y_predicted == i)).sum()
+            tn = ((y_true != i) & (y_predicted != i)).sum()
+            fp = ((y_true != i) & (y_predicted == i)).sum()
+            fn = ((y_true == i) & (y_predicted != i)).sum()
             errors.append(1 - 0.5*(tp / np.maximum(tp + fn, epsilon)) - 0.5*(tn / np.maximum(tn + fp, epsilon)))
         return np.mean(errors)
 
     elif p_type == 'regression':
-        return mean_squared_error(y_observed, y_predicted)
+        return mean_squared_error(y_true, y_predicted)
 
 
 def invalid_args(func, arglist):
