@@ -134,6 +134,7 @@ class Ensemble(Model):
     def __init__(self, p_type, algorithm, hyperparameters={}):
         super().__init__(p_type, algorithm, hyperparameters)
         self.base_learners = []
+        self.best_idx = None
 
     def add_base_learner(self, model):
         """Add weak learner to ensemble.
@@ -152,14 +153,20 @@ class Ensemble(Model):
         """
         assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
 
-        base_learner_predictions = ()
+        # base_learner_predictions = ()
+        cv_errors = []
         for model in self.base_learners:
-            _, y_predicted = model.kfold_fit_validate(x_train, y_train, n_folds=3)
-            base_learner_predictions += (np.reshape(y_predicted, [-1, 1]), )
-            model.fit(x_train, y_train)
+            cv_error, _ = model.kfold_fit_validate(x_train, y_train, n_folds=3)
+            cv_errors.append(cv_error.mean())
+            #  _, y_predicted = model.kfold_fit_validate(x_train, y_train, n_folds=3)
+            # base_learner_predictions += (np.reshape(y_predicted, [-1, 1]), )
+            # model.fit(x_train, y_train)
+        # x_tr = np.hstack(base_learner_predictions)
+        # self.model.fit(x_tr, y_train)
 
-        x_tr = np.hstack(base_learner_predictions)
-        self.model.fit(x_tr, y_train)
+        # pick model with lowest k-fold CV error as ensemble algorithm
+        self.best_idx = np.argsort(cv_errors)[0]
+        self.base_learners[self.best_idx].fit(x_train, y_train)
         self.fitted = True
 
     def predict(self, x_test):
@@ -173,10 +180,10 @@ class Ensemble(Model):
         """
         assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
 
-        base_learner_predictions = ()
-        for model in self.base_learners:
-            y_predicted = np.reshape(model.predict(x_test), [-1, 1])
-            base_learner_predictions += (y_predicted, )
+        # base_learner_predictions = ()
+        # for model in self.base_learners:
+        #    y_predicted = np.reshape(model.predict(x_test), [-1, 1])
+        #    base_learner_predictions += (y_predicted, )
 
-        x_te = np.hstack(base_learner_predictions)
-        return self.model.predict(x_te)
+        # x_te = np.hstack(base_learner_predictions)
+        return self.base_learners[self.best_idx].predict(x_test)
