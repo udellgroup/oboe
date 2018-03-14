@@ -27,6 +27,7 @@ class Model:
         self.algorithm = algorithm
         self.hyperparameters = hyperparameters
         self.model = self.instantiate()
+        self.cv_error = np.nan
         self.fitted = False
         self.verbose = verbose
 
@@ -97,6 +98,7 @@ class Model:
                 y_predicted[test_idx] = y_tr[0]
             cv_errors[i] = self.error(y_predicted[test_idx], y_te)
 
+        self.cv_error = cv_errors.mean()
         if self.verbose:
             print("{} {} complete.".format(self.algorithm, self.hyperparameters))
 
