@@ -68,27 +68,27 @@ class AutoLearner:
             if type(error_matrix) == str:
                 if error_matrix == 'default':
                     error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
-                    default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
+                    self.default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
             elif type(error_matrix) == pd.core.frame.DataFrame:
-                default_error_matrix = error_matrix
+                self.default_error_matrix = error_matrix
             if type(runtime_matrix) == str:
                 if runtime_matrix == 'default':
                     runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
-                    default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
+                    self.default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
             elif type(runtime_matrix) == pd.core.frame.DataFrame:
-                default_runtime_matrix = runtime_matrix
+                self.default_runtime_matrix = runtime_matrix
             
-            assert set(default_error_matrix.index.tolist()) == set(default_runtime_matrix.index.tolist()), "Indices of error and runtime matrices must match."
-            column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
+            assert set(self.default_error_matrix.index.tolist()) == set(self.default_runtime_matrix.index.tolist()), "Indices of error and runtime matrices must match."
+            column_headings = np.array([eval(heading) for heading in list(self.default_error_matrix)])
             selected_indices = np.full(len(column_headings), True)
             # selected_indices = np.array([heading in column_headings for heading in default])
-            self.error_matrix = default_error_matrix.values[:, selected_indices]
-            self.error_index = default_error_matrix.index.tolist()
-            self.runtime_index = default_runtime_matrix.index.tolist()
-            self.runtime_matrix = default_runtime_matrix.values[:, selected_indices]
+            self.error_matrix = self.default_error_matrix.values[:, selected_indices]
+            self.error_index = self.default_error_matrix.index.tolist()
+            self.runtime_index = self.default_runtime_matrix.index.tolist()
+            self.runtime_matrix = self.default_runtime_matrix.values[:, selected_indices]
 
             if self.cvxopt_package == 'cvxpy':
-                self.dataset_sizes = convex_opt_c.get_dataset_sizes(default_error_matrix)
+                self.dataset_sizes = convex_opt_c.get_dataset_sizes(self.default_error_matrix)
             # self.column_headings = sorted(default, key=lambda d: d['algorithm'])
             self.column_headings = column_headings
             self.bayes_opt = bayes_opt
@@ -121,7 +121,7 @@ class AutoLearner:
                 else:
                     known_indices = convex_opt_c.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=self.n_cores)
             elif self.cvxopt_package == 'scipy':
-                runtime_predict = convex_opt_s.predict_runtime(x_train.shape)
+                runtime_predict = convex_opt_s.predict_runtime(size=x_train.shape, runtime_matrix=self.default_runtime_matrix)
                 X, Y, Vt = linalg.pca(self.error_matrix, threshold=0.03)
                 v_opt_x = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y, scalarization=self.scalarization, n_cores=self.n_cores)
                 known_indices = np.where(v_opt_x>0.8)[0]
@@ -154,7 +154,8 @@ class AutoLearner:
 
         # TODO: Fit ensemble candidates (?)
         
-        n_models = 5
+#        n_models = 5
+        n_models = int(len(known_indices) / 2)
 
         bayesian_opt_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                      self.column_headings[i]['hyperparameters'], verbose=self.verbose)
