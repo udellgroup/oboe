@@ -2,7 +2,6 @@
 Miscellaneous helper functions.
 """
 
-# import openml
 import inspect
 import itertools
 import json
@@ -56,10 +55,9 @@ def error(y_observed, y_predicted, p_type):
     MSE (Mean Squared Error): For regression. 1/n * sum(||y_pred - y_obs||^2).
 
     Args:
-        y_observed (np.ndarray): Observed labels.
+        y_observed (np.ndarray):  Observed labels.
         y_predicted (np.ndarray): Predicted labels.
-        p_type (str): Type of problem. One of {'classification', 'regression'}
-
+        p_type (str):             Type of problem. One of {'classification', 'regression'}
     Returns:
         float: Error metric.
     """
@@ -86,8 +84,7 @@ def invalid_args(func, arglist):
 
     Args:
         func (function): Function to check arguments for.
-        arglist (list): Proposed arguments
-
+        arglist (list):  Proposed arguments
     Returns:
         set: Set of arguments in args that are invalid (returns empty set if there are none).
     """
@@ -99,11 +96,10 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
     """Check if arguments to constructor of AutoLearner object are valid, and default error matrix can be used.
 
     Args:
-        p_type (str): Problem type. One of {'classification', 'regression'}
-        algorithms (list): List of selected algorithms as strings. (e.g. ['KNN', 'lSVM', 'kSVM']
+        p_type (str):           Problem type. One of {'classification', 'regression'}
+        algorithms (list):      List of selected algorithms as strings. (e.g. ['KNN', 'lSVM', 'kSVM']
         hyperparameters (dict): Nested dict of selected hyperparameters.
-        defaults (dict): Nested dict of default algorithms & hyperparameters.
-
+        defaults (dict):        Nested dict of default algorithms & hyperparameters.
     Returns:
         bool: Whether or not the default error matrix can be used.
     """
@@ -145,20 +141,56 @@ def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
     return compatible_columns, new_columns
 
 
+def knapsack(weights, values, capacity):
+    """Solve the knapsack problem; maximize sum_i v[i]*x[i] subject to sum_i w[i]*x[i] <= W and x[i] in {0, 1}
+
+    Args:
+        weights (np.ndarray): "weights" of each item
+        values (np.ndarray):  "values" of each item
+        capacity (int):       maximum "weight" allowed
+    Returns:
+        list: list of selected indices
+    """
+    # TODO: how precisely to round runtimes? Handle rounding inside/outside this method?
+    assert weights.shape == values.shape, "Weights & values must have same shape."
+    assert type(capacity) == int, "Capacity must be an integer."
+    n = weights.size
+    m = np.zeros((n+1, capacity+1)).astype(int)
+
+    for i in range(n+1):
+        for w in range(capacity+1):
+            if i == 0 or w == 0:
+                pass
+            elif weights[i-1] <= w:
+                m[i, w] = max(values[i-1] + m[i-1, w-weights[i-1]], m[i-1, w])
+            else:
+                m[i, w] = m[i-1, w]
+
+    def find_selected(j, v):
+        if j == 0:
+            return []
+        if m[j, v] > m[j-1, v]:
+            return [j-1] + find_selected(j-1, v - weights[j-1])
+        else:
+            return find_selected(j-1, v)
+
+    return find_selected(n, capacity)
+
+
 def generate_settings(algorithms, hyperparameters, sort=True):
     """Generate column headings of error matrix.
 
     Args:
-        algorithms (list): A list of algorithms in strings (e.g. ['KNN', 'RF', 'lSVM'])
+        algorithms (list):      A list of algorithms in strings (e.g. ['KNN', 'RF', 'lSVM'])
         hyperparameters (dict): A nested dictionary of hyperparameters. First key is algorithm type (str), second key
-        is hyperparameter name (str); argument to pass to scikit-learn constructor with array of values
-        (e.g. {'KNN': {'n_neighbors': np.array([1, 3, 5, 7]),
-                       'p': np.array([1, 2])}}).
-        sort (bool): Whether to sort settings in alphabetical order with respect to algorithm name.
-
+                                is hyperparameter name (str); argument to pass to scikit-learn constructor with array
+                                of values
+                                (e.g. {'KNN': {'n_neighbors': np.array([1, 3, 5, 7]),
+                                               'p':           np.array([1, 2])}}).
+        sort (bool):            Whether to sort settings in alphabetical order with respect to algorithm name.
     Returns:
         list: List of nested dictionaries, one entry for each model setting.
-              (e.g. [{'algorithm': 'KNN', 'hyperparameters': {'n_neighbors': 1, 'p': 1}},
+              (e.g. [{'algorithm': 'KNN',  'hyperparameters': {'n_neighbors': 1, 'p': 1}},
                      {'algorithm': 'lSVM', 'hyperparameters': {'C': 1.0}}])
     """
     settings = []
