@@ -169,7 +169,7 @@ def transform_and_keep_indices(numpy_array, operator):
 
 
 def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
-                                 n_cores=None, threshold=0.03, plot_solution_quality=False,
+                                 n_cores=None, threshold=0.03,
                                  relaxation_threshold=0.8):
     
     """
@@ -181,7 +181,6 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
         error_matrix (np.ndarray): The error matrix in use.
         n_cores (int): The number of cores as resource limit.
         threshold (float): The threshold for truncating singular values to get matrix Y.
-        plot_solution_quality (Boolean): Whether to plot the v values of the relaxed integer programming problem.
         relaxation_threshold (float): The threshold for truncating v values to get an approximate solution for the original integer programming problem.
         
     Returns:
@@ -210,22 +209,14 @@ def min_variance_model_selection(runtime_limit, runtime_predict, error_matrix,
     rank = lrm.approx_rank(error_matrix, threshold=threshold)
     rank_one_percent = lrm.approx_rank(error_matrix, threshold=0.01)
     X,Y,Vt = lrm.pca(error_matrix, threshold=threshold)
-    num_pivots_selected = rank
 
     #model selection for variance minimization via D-optimal design
     v = Variable(num_models)
     objective = Minimize(-log_det(sum([v[i]*np.outer(Y[:, i], Y[:, i]) for i in range(num_models)])))
     constraints = [0 <= v, v <= 1]
-    constraints += [runtime_predict*v <= runtime_limit*n_cores] # time constraint
+    constraints += [runtime_predict*v <= runtime_limit * n_cores] # time constraint
     prob = Problem(objective, constraints)
     result = prob.solve()
     v_sol = np.array(v.value).T[0] #the solution to v in numpy array format
 
-    if plot_solution_quality:
-        f = plt.figure()
-        plt.hist(v_sol)
-        plt.title('Distribution of v Values when runtime='+str(runtime_limit))
-        f.savefig('runtime='+str(runtime_limit)+'.png', dpi=250, bbox_inches='tight', format = 'png')
-    
-    v_indices_selected = np.where(v_sol>relaxation_threshold)[0]
-    return v_indices_selected
+    return v_sol

@@ -49,11 +49,12 @@ def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
     return v_opt.x
 
 
-def predict_runtime(size, log=True, saved_model=None):
+def predict_runtime(size, runtime_matrix, log=True, saved_model=None):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
         size (np.ndarray): 1-d array specifying dataset size as [n_rows, n_columns]
+        runtime_matrix (pandas.core.frame.DataFrame): The DataFame containing runtime.
         log (Boolean): whether to take logarithms of runtime when fitting.
         saved_model (str): path to pre-trained model; defaults to None
     Returns:
@@ -75,7 +76,7 @@ def predict_runtime(size, log=True, saved_model=None):
     except FileNotFoundError:
         sizes_index = []
         sizes = []
-    runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
+#    runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
     runtimes_index = np.array(runtime_matrix.index)
     runtimes = runtime_matrix.values
     if log:
