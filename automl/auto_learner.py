@@ -117,14 +117,14 @@ class AutoLearner:
                 runtime_predict = np.exp(log_runtime_predict)
                 if self.transform_error_matrix:
                     error_matrix_transformed = convex_opt_c.inv_sigmoid(convex_opt_c.truncate(self.error_matrix))
-                    known_indices = convex_opt_c.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed, n_cores=self.n_cores)
+                    v_sol = convex_opt_c.min_variance_model_selection(self.runtime_limit, runtime_predict, error_matrix_transformed, n_cores=self.n_cores)
                 else:
-                    known_indices = convex_opt_c.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=self.n_cores)
+                    v_sol = convex_opt_c.min_variance_model_selection(self.runtime_limit, runtime_predict, self.error_matrix, n_cores=self.n_cores)
             elif self.cvxopt_package == 'scipy':
                 runtime_predict = convex_opt_s.predict_runtime(size=x_train.shape, runtime_matrix=self.default_runtime_matrix)
                 X, Y, Vt = linalg.pca(self.error_matrix, threshold=0.03)
-                v_opt_x = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y, scalarization=self.scalarization, n_cores=self.n_cores)
-                known_indices = np.where(v_opt_x>0.8)[0]
+                v_sol = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y, scalarization=self.scalarization, n_cores=self.n_cores)
+            known_indices = np.where(v_sol>0.8)[0]
 
         if self.debug_mode:
             self.num_known_indices = len(known_indices)
