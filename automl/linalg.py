@@ -35,17 +35,20 @@ def pivot_columns(a, threshold=0.03):
     return qr(a, pivoting=True)[2][:rank]
 
 
-def pca(a, threshold=0.03):
+def pca(a, threshold=0.03, rank=None):
     """Solves: minimize ||A_XY||^2 where ||.|| is the Frobenius norm.
 
     Args:
         a (np.ndarray): Matrix for which to compute PCA.
         threshold (float): Threshold specifying approximate rank of a.
+        rank (int): The approximate rank.
     Returns:
         x, y (np.ndarray): The solutions to the PCA problem.
         vt (np.ndarray): Transpose of V as specified in the singular value decomposition.
     """
-    rank = approx_rank(a, threshold)
+    assert (threshold == None) != (rank == None), "Note that exactly one of threshold and rank should be None."
+    if threshold != None:
+        rank = approx_rank(a, threshold)
     std = np.std(a, axis=0)
     u, s, vt = svds(a, k=rank)
     sigma_sqrt = np.diag(np.sqrt(s))
