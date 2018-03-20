@@ -152,9 +152,9 @@ def knapsack(weights, values, capacity):
         list: list of selected indices
     """
     # TODO: how precisely to round runtimes? Handle rounding inside/outside this method?
-    assert weights.shape == values.shape, "Weights & values must have same shape."
+    assert len(weights) == len(values), "Weights & values must have same shape."
     assert type(capacity) == int, "Capacity must be an integer."
-    n = weights.size
+    n = len(weights)
     m = np.zeros((n+1, capacity+1)).astype(int)
 
     for i in range(n+1):
