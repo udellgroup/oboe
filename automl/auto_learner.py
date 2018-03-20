@@ -8,10 +8,8 @@ import pandas as pd
 import pkg_resources
 import linalg
 import util
-import convex_opt_c
 import convex_opt_s
 from model import Model, Ensemble
-from pathos.multiprocessing import ProcessingPool as Pool
 
 
 class AutoLearner:
