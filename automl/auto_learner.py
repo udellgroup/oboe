@@ -2,14 +2,17 @@
 Automatically tuned scikit-learn model.
 """
 
-import numpy as np
+import convex_opt
+import linalg
 import multiprocessing as mp
+import numpy as np
+import os
 import pandas as pd
 import pkg_resources
-import linalg
 import util
-import convex_opt_s
 from model import Model, Ensemble
+
+DEFAULTS = pkg_resources.resource_filename(__name__, 'defaults')
 
 
 class AutoLearner:
@@ -28,98 +31,100 @@ class AutoLearner:
 
     def __init__(self, p_type, error_matrix='default', runtime_matrix='default', algorithms=None, hyperparameters=None,
                  n_cores=None, verbose=False, selection_method='qr', runtime_limit=None, scalarization='D',
-                 bayes_opt=False, stacking_alg='Logit', giant_ensemble=False, **stacking_hyperparams):
+                 stacking_alg='Logit', giant_ensemble=False, **stacking_hyperparams):
 
+        # TODO: check if arguments to constructor are valid; set to defaults if not specified
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to sample must be " \
             "either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
 
-        # check if arguments to constructor are valid; set to defaults if not specified
-        # default, new = util.check_arguments(p_type, algorithms, hyperparameters)
+        # attributes of ML problem
         self.p_type = p_type.lower()
         self.algorithms = algorithms
         self.hyperparameters = hyperparameters
-        self.n_cores = n_cores
         self.verbose = verbose
-        self.selection_method = selection_method
+
+        # computational considerations
+        self.n_cores = n_cores
         self.runtime_limit = runtime_limit
 
-        self.n_cores = n_cores
+        # sample column selection
+        self.selection_method = selection_method
         self.scalarization = scalarization
-        self.giant_ensemble = giant_ensemble
+        self.known_indices = set()
 
-        # TODO: determine whether to generate new error matrix or use default
-        # use default error matrix (or subset of)
+        # error matrix attributes
+        # TODO: determine whether to generate new error matrix or use default/subset of default
         if error_matrix == 'default':
-            error_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/error_matrix.csv')
-            default_error_matrix = pd.read_csv(error_matrix_path, index_col=0)
-        elif type(error_matrix) == pd.core.frame.DataFrame:
-            default_error_matrix = error_matrix
-
+            error_matrix = pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0)
         if runtime_matrix == 'default':
-            runtime_matrix_path = pkg_resources.resource_filename(__name__, 'defaults/runtime_matrix.csv')
-            default_runtime_matrix = pd.read_csv(runtime_matrix_path, index_col=0)
-        elif type(runtime_matrix) == pd.core.frame.DataFrame:
-            default_runtime_matrix = runtime_matrix
+            runtime_matrix = pd.read_csv(os.path.join(DEFAULTS, 'runtime_matrix.csv'), index_col=0)
+        assert util.check_dataframes(error_matrix, runtime_matrix)
+        self.column_headings = np.array([eval(heading) for heading in list(error_matrix)])
+        self.error_matrix = error_matrix.values
+        self.runtime_matrix = runtime_matrix.values
+        self.new_row = np.zeros((1, self.error_matrix.shape[1]))
 
-        assert set(default_error_matrix.index) == set(default_runtime_matrix.index), \
-            "Indices of error and runtime matrices must match."
-        column_headings = np.array([eval(heading) for heading in list(default_error_matrix)])
-        selected_indices = np.full(len(column_headings), True)
-        # selected_indices = np.array([heading in column_headings for heading in default])
-        self.error_matrix = default_error_matrix.values[:, selected_indices]
-        self.error_index = default_error_matrix.index.tolist()
-        self.runtime_index = default_runtime_matrix.index.tolist()
-        self.runtime_matrix = default_runtime_matrix.values[:, selected_indices]
-
-        # self.column_headings = sorted(default, key=lambda d: d['algorithm'])
-        self.column_headings = column_headings
-        self.bayes_opt = bayes_opt
-
+        # ensemble attributes
         self.ensemble = Ensemble(self.p_type, stacking_alg, stacking_hyperparams)
-        self.optimized_settings = []
-        self.new_row = None
+        self.giant_ensemble = giant_ensemble
 
     def fit(self, x_train, y_train):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
-        new dataset, predict performance on the rest, then perform Bayesian optimization and construct an optimal
-        ensemble model.
+        new dataset, predict performance on the rest, then construct an optimal ensemble model.
 
         Args:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
         """
-        self.new_row = np.zeros((1, self.error_matrix.shape[1]))
+        t_predicted = convex_opt.predict_runtime(x_train.shape)
+
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
-            runtime_predict = convex_opt_s.predict_runtime(x_train.shape)
-            X, Y, Vt = linalg.pca(self.error_matrix, threshold=0.03)
-            v_opt_x = convex_opt_s.solve(runtime_predict, self.runtime_limit, Y, scalarization=self.scalarization,
-                                         n_cores=self.n_cores)
-            known_indices = np.where(v_opt_x > 0.8)[0]
-        
+            _, Y, _ = linalg.pca(self.error_matrix, threshold=0.03)
+            # TODO: Is 50/50 allocation of time to sampling & fitting appropriate?
+            v_opt = convex_opt.solve(t_predicted, self.runtime_limit/2, Y, self.scalarization, self.n_cores)
+            known_indices = np.where(v_opt > 0.8)[0]
+        else:
+            known_indices = np.arange(0, self.new_row.shape[1])
+
+        # only need to compute column entry if it has not been computed already
+        to_sample = list(set(known_indices) - self.known_indices)
         if self.verbose:
-            print('Sampling {} entries of new row...'.format(len(known_indices)))
+            print('Sampling {} entries of new row...'.format(len(to_sample)))
         pool1 = mp.Pool(self.n_cores)
+        # TODO: Determine appropriate number of folds for k-fold fit/validate (currently 5)
         sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
-                               self.column_headings[i]['hyperparameters'], verbose=self.verbose)
-                         for i in known_indices]
+                               self.column_headings[i]['hyperparameters'], verbose=self.verbose) for i in to_sample]
         sample_model_errors = [pool1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5])
                                for m in sample_models]
         pool1.close()
         pool1.join()
 
         for i, error in enumerate(sample_model_errors):
-            self.new_row[:, known_indices[i]] = error.get()[0].mean()
+            self.new_row[:, to_sample[i]] = error.get()[0].mean()
         self.new_row = linalg.impute(self.error_matrix, self.new_row, known_indices)
+        # update known indices
+        self.known_indices = set(known_indices)
 
         # add every sampled model to ensemble
         if self.giant_ensemble:
             for model in sample_models:
                 self.ensemble.add_base_learner(model)
 
-        # Add new row to error matrix at the end (might be incorrect?)
+        # TODO: Add new row to error matrix at the end (might be incorrect?)
         # self.error_matrix = np.vstack((self.error_matrix, self.new_row))
+
+        # solve knapsack problem to select models to add to ensemble
+        # TODO: Determine rounding scheme to discretize knapsack problem
+        weights = t_predicted.astype(int)
+        values = (1e3/self.new_row).astype(int)
+        # TODO: Determine remaining time left to allocate to fitting ensemble
+        best_indices = util.knapsack(weights, values, int(self.runtime_limit/2))
+        for i in best_indices:
+            m = Model(self.p_type, self.column_headings[i]['algorithm'], self.column_headings[i]['hyperparameters'],
+                      verbose=self.verbose)
+            self.ensemble.add_base_learner(m)
 
         if self.verbose:
             print('\nFitting optimized ensemble...')
@@ -145,6 +150,8 @@ class AutoLearner:
 
         Args:
             x_test (np.ndarray): Features of the test dataset.
+        Returns:
+            np.ndarray: Predicted labels.
         """
         return self.ensemble.predict(x_test)
 

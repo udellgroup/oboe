@@ -177,6 +177,12 @@ def knapsack(weights, values, capacity):
     return find_selected(n, capacity)
 
 
+def check_dataframes(m1, m2):
+    assert m1.shape == m2.shape
+    assert set(m1.index) == set(m2.index)
+    return True
+
+
 def generate_settings(algorithms, hyperparameters, sort=True):
     """Generate column headings of error matrix.
 

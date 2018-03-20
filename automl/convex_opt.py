@@ -76,7 +76,7 @@ def predict_runtime(size, runtime_matrix, log=True, saved_model=None):
     except FileNotFoundError:
         sizes_index = []
         sizes = []
-#    runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
+    # runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
     runtimes_index = np.array(runtime_matrix.index)
     runtimes = runtime_matrix.values
     if log:
@@ -104,12 +104,12 @@ class RuntimePredictor:
     def __init__(self, degree, sizes, sizes_index, runtimes, runtimes_index):
         self.degree = degree
         self.n_models = runtimes.shape[1]
-        self.models = [None, ] * self.n_models
+        self.models = [None] * self.n_models
         self.fit(sizes, sizes_index, runtimes, runtimes_index)
 
     def fit(self, sizes, sizes_index, runtimes, runtimes_index):
         """Fit polynomial regression on pre-recorded runtimes on datasets."""
-#        assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
+        # assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
         for i in set(runtimes_index).difference(set(sizes_index)):
             dataset=openml.datasets.get_dataset(i)
             data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,
