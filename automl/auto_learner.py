@@ -31,7 +31,7 @@ class AutoLearner:
 
     def __init__(self, p_type, error_matrix='default', runtime_matrix='default', algorithms=None, hyperparameters=None,
                  n_cores=None, verbose=False, selection_method='qr', runtime_limit=None, scalarization='D',
-                 stacking_alg='Logit', giant_ensemble=False, **stacking_hyperparams):
+                 stacking_alg='Logit', giant_ensemble=False, debug_mode=False, **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
         assert selection_method in ['qr', 'min_variance'], "The method to select entries to sample must be " \
@@ -67,6 +67,9 @@ class AutoLearner:
         # ensemble attributes
         self.ensemble = Ensemble(self.p_type, stacking_alg, stacking_hyperparams)
         self.giant_ensemble = giant_ensemble
+        
+        #debug mode: whether to keep some more intermediate results
+        self.debug_mode = debug_mode
 
     def fit(self, x_train, y_train):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
@@ -118,9 +121,15 @@ class AutoLearner:
         # solve knapsack problem to select models to add to ensemble
         # TODO: Determine rounding scheme to discretize knapsack problem
         weights = t_predicted.astype(int)
-        values = (1e3/self.new_row).astype(int)
+        values = (1e3/self.new_row)[0].astype(int)
         # TODO: Determine remaining time left to allocate to fitting ensemble
         best_indices = util.knapsack(weights, values, int(self.runtime_limit/2))
+        if self.debug_mode:
+            self.num_best_indices = len(best_indices)
+            pivot_columns_one_percent = linalg.pivot_columns(self.error_matrix, threshold=0.01)
+            self.num_pivots_one_percent = len(pivot_columns_one_percent)
+            self.num_overlap_with_pivots = len(set(best_indices).intersection(set(pivot_columns_one_percent)))
+            
         for i in best_indices:
             m = Model(self.p_type, self.column_headings[i]['algorithm'], self.column_headings[i]['hyperparameters'],
                       verbose=self.verbose)
