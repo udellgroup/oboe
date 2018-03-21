@@ -32,7 +32,6 @@ class AutoLearner:
         stacking_alg (str):            Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
-
     def __init__(self,
                  p_type, algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=mp.cpu_count(), runtime_limit=512,
