@@ -149,7 +149,7 @@ def knapsack(weights, values, capacity):
         values (np.ndarray):  "values" of each item
         capacity (int):       maximum "weight" allowed
     Returns:
-        list: list of selected indices
+        set: list of selected indices
     """
     # TODO: how precisely to round runtimes? Handle rounding inside/outside this method?
     assert len(weights) == len(values), "Weights & values must have same shape."
@@ -168,9 +168,9 @@ def knapsack(weights, values, capacity):
 
     def find_selected(j, v):
         if j == 0:
-            return []
+            return set()
         if m[j, v] > m[j-1, v]:
-            return [j-1] + find_selected(j-1, v - weights[j-1])
+            return {j-1}.union(find_selected(j-1, v - weights[j-1]))
         else:
             return find_selected(j-1, v)
 
