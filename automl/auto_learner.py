@@ -127,7 +127,7 @@ class AutoLearner:
         # solve knapsack problem to select models to add to ensemble
         # TODO: Determine rounding scheme to discretize knapsack problem
         weights = t_predicted.astype(int)
-        values = (1e3/self.new_row).astype(int)
+        values = (1e3/self.new_row)[0].astype(int)
         self.best_indices = util.knapsack(weights, values, int(remaining))
 
         # add models selected by knapsack problem to ensemble
