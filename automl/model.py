@@ -116,7 +116,7 @@ class Model:
         """Compute error metric for the model.
 
         Args:
-            y_observed (np.ndarray): Observed labels.
+            y_observed (np.ndarray):  Observed labels.
             y_predicted (np.ndarray): Predicted labels.
 
         Returns:
@@ -129,10 +129,10 @@ class Ensemble(Model):
     """An object representing an ensemble of machine learning models.
 
     Attributes:
-        p_type (str): Either 'classification' or 'regression'.
-        algorithm (str): Algorithm type (e.g. 'Logit').
+        p_type (str):           Either 'classification' or 'regression'.
+        algorithm (str):        Algorithm type (e.g. 'Logit').
         hyperparameters (dict): Hyperparameters (e.g. {'C': 1.0}).
-        model (object): A scikit-learn object for the model.
+        model (object):         A scikit-learn object for the model.
     """
 
     def __init__(self, p_type, algorithm, hyperparameters={}):

@@ -2,6 +2,7 @@
 Automatically tuned scikit-learn model.
 """
 
+import copy
 import convex_opt
 import linalg
 import multiprocessing as mp
@@ -12,6 +13,7 @@ import pkg_resources
 import time
 import util
 from model import Model, Ensemble
+from sklearn.model_selection import train_test_split
 
 DEFAULTS = pkg_resources.resource_filename(__name__, 'defaults')
 
@@ -57,7 +59,7 @@ class AutoLearner:
         self.selection_method = selection_method
         self.scalarization = scalarization
         self.known_indices = set()
-        self.best_indices = []
+        self.best_indices = set()
 
         # error matrix attributes
         # TODO: determine whether to generate new error matrix or use default/subset of default
@@ -75,23 +77,33 @@ class AutoLearner:
         self.ensemble = Ensemble(self.p_type, stacking_alg, stacking_hyperparams)
         self.giant_ensemble = giant_ensemble
 
-    def fit(self, x_train, y_train):
+    def fit(self, x_train, y_train, rank=None, runtime_limit=None):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
         new dataset, predict performance on the rest, then construct an optimal ensemble model.
 
         Args:
-            x_train (np.ndarray): Features of the training dataset.
-            y_train (np.ndarray): Labels of the training dataset.
+            x_train (np.ndarray):  Features of the training dataset.
+            y_train (np.ndarray):  Labels of the training dataset.
+            rank (int):            Rank of error matrix factorization.
+            runtime_limit (float): Maximum time to allocate to AutoLearner fitting.
         """
+        # set to defaults if not provided
+        rank = rank or linalg.approx_rank(self.error_matrix, threshold=0.03)
+        runtime_limit = runtime_limit or self.runtime_limit
+
+        if self.verbose:
+            print('Fitting AutoLearner with max. runtime {}s'.format(runtime_limit))
+
         t_predicted = convex_opt.predict_runtime(x_train.shape)
 
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
-            _, Y, _ = linalg.pca(self.error_matrix, threshold=0.03)
+            _, Y, _ = linalg.pca(self.error_matrix, threshold=None, rank=rank)
             # TODO: Is 50/50 allocation of time to sampling & fitting appropriate?
-            v_opt = convex_opt.solve(t_predicted, self.n_cores*self.runtime_limit/2, Y, self.scalarization)
-            known_indices = np.where(v_opt > 0.8)[0]
+            v_opt = convex_opt.solve(t_predicted, self.n_cores * runtime_limit/2, Y, self.scalarization)
+            # TODO: Raise threshold? Currently sampling way too many columns
+            known_indices = np.where(v_opt > 0.95)[0]
         else:
             known_indices = np.arange(0, self.new_row.shape[1])
 
@@ -108,7 +120,7 @@ class AutoLearner:
                                for m in sample_models]
         pool1.close()
         pool1.join()
-        remaining = (self.runtime_limit - (time.time()-start)) * self.n_cores
+        remaining = (runtime_limit - (time.time()-start)) * self.n_cores
 
         for i, error in enumerate(sample_model_errors):
             self.new_row[:, to_sample[i]] = error.get()[0].mean()
@@ -131,14 +143,16 @@ class AutoLearner:
         best_indices = util.knapsack(weights, values, int(remaining))
 
         # add models selected by knapsack problem to ensemble
-        for i in set(best_indices) - set(self.best_indices):
+        if self.verbose:
+            print('Newly added models:', best_indices - self.best_indices)
+        for i in best_indices - self.best_indices:
             m = Model(self.p_type, self.column_headings[i]['algorithm'], self.column_headings[i]['hyperparameters'],
                       verbose=self.verbose)
             self.ensemble.add_base_learner(m)
         self.best_indices = best_indices
 
         if self.verbose:
-            print('\nFitting optimized ensemble...')
+            print('\nFitting optimized ensemble of size {}...'.format(len(self.ensemble.base_learners)))
         self.ensemble.fit(x_train, y_train)
         self.ensemble.fitted = True
 
@@ -146,7 +160,42 @@ class AutoLearner:
             print('\nAutoLearner fitting complete.')
 
     def fit_doubling(self, x_train, y_train):
-        """Fit an AutoLearner object """
+        """Fit an AutoLearner object, iteratively doubling allowed runtime."""
+        t_predicted = convex_opt.predict_runtime(x_train.shape)
+        # TODO: Is there a better way to set initial runtime? (currently approx. sum of 40 fastest algorithms)
+        fastest_40 = np.sort(t_predicted)[:40].sum()
+        t = 2**np.floor(np.log2(fastest_40))
+        k = linalg.approx_rank(self.error_matrix, threshold=0.03)
+
+        # split data into training and validation sets
+        x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15)
+
+        # first iteration
+        start = time.time()
+        self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
+        error_t = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+        best_new_row = np.copy(self.new_row)
+        best_ensemble = copy.deepcopy(self.ensemble)
+        k_prev = k
+        t = 2*t
+
+        # all subsequent iterations
+        while time.time() - start < self.runtime_limit - t:
+            self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
+
+            # TODO: conduct cross-validation?
+            error_p = error_t
+            error_t = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+            if error_t > error_p:
+                k = k_prev
+            else:
+                best_new_row = np.copy(self.new_row)
+                best_ensemble = copy.deepcopy(self.ensemble)
+            t = 2*t
+
+        # after all iterations, restore best model
+        self.new_row = best_new_row
+        self.ensemble = best_ensemble
 
     def refit(self, x_train, y_train):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
