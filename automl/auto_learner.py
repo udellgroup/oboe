@@ -9,6 +9,7 @@ import numpy as np
 import os
 import pandas as pd
 import pkg_resources
+import time
 import util
 from model import Model, Ensemble
 
@@ -23,14 +24,20 @@ class AutoLearner:
         algorithms (list):             A list of algorithm types to be considered, in strings.
                                        (e.g. ['KNN', 'lSVM', 'kSVM']).
         hyperparameters (dict):        A nested dict of hyperparameters to be considered; see above for example.
-        n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
         verbose (bool):                Whether or not to generate print statements when a model finishes fitting.
+        n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
+        runtime_limit(int):            Maximum training time for AutoLearner (powers of 2 preferred).
+        selection_method (str):        Method of selecting entries of new row to sample.
+        scalarization (str):           Scalarization of objective for min-variance selection. Either 'D' or 'A'.
         stacking_alg (str):            Algorithm type to use for stacked learner.
         **stacking_hyperparams (dict): Hyperparameter settings of stacked learner.
     """
 
-    def __init__(self, p_type, error_matrix='default', runtime_matrix='default', algorithms=None, hyperparameters=None,
-                 n_cores=None, verbose=False, selection_method='qr', runtime_limit=None, scalarization='D',
+    def __init__(self,
+                 p_type, algorithms=None, hyperparameters=None, verbose=False,
+                 n_cores=mp.cpu_count(), runtime_limit=512,
+                 selection_method='qr', scalarization='D',
+                 error_matrix='default', runtime_matrix='default',
                  stacking_alg='Logit', giant_ensemble=False, **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
@@ -83,7 +90,7 @@ class AutoLearner:
         elif self.selection_method == 'min_variance':
             _, Y, _ = linalg.pca(self.error_matrix, threshold=0.03)
             # TODO: Is 50/50 allocation of time to sampling & fitting appropriate?
-            v_opt = convex_opt.solve(t_predicted, self.runtime_limit/2, Y, self.scalarization, self.n_cores)
+            v_opt = convex_opt.solve(t_predicted, self.n_cores*self.runtime_limit/2, Y, self.scalarization)
             known_indices = np.where(v_opt > 0.8)[0]
         else:
             known_indices = np.arange(0, self.new_row.shape[1])
@@ -92,6 +99,7 @@ class AutoLearner:
         to_sample = list(set(known_indices) - self.known_indices)
         if self.verbose:
             print('Sampling {} entries of new row...'.format(len(to_sample)))
+        start = time.time()
         pool1 = mp.Pool(self.n_cores)
         # TODO: Determine appropriate number of folds for k-fold fit/validate (currently 5)
         sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
@@ -100,6 +108,7 @@ class AutoLearner:
                                for m in sample_models]
         pool1.close()
         pool1.join()
+        remaining = (self.runtime_limit - (time.time()-start)) * self.n_cores
 
         for i, error in enumerate(sample_model_errors):
             self.new_row[:, to_sample[i]] = error.get()[0].mean()
@@ -119,8 +128,9 @@ class AutoLearner:
         # TODO: Determine rounding scheme to discretize knapsack problem
         weights = t_predicted.astype(int)
         values = (1e3/self.new_row).astype(int)
-        # TODO: Determine remaining time left to allocate to fitting ensemble
-        best_indices = util.knapsack(weights, values, int(self.runtime_limit/2))
+        best_indices = util.knapsack(weights, values, int(remaining))
+
+        # add models selected by knapsack problem to ensemble
         for i in best_indices:
             m = Model(self.p_type, self.column_headings[i]['algorithm'], self.column_headings[i]['hyperparameters'],
                       verbose=self.verbose)
@@ -133,6 +143,9 @@ class AutoLearner:
 
         if self.verbose:
             print('\nAutoLearner fitting complete.')
+
+    def fit_doubling(self, x_train, y_train):
+        """Fit an AutoLearner object """
 
     def refit(self, x_train, y_train):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
