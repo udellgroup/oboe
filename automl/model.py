@@ -14,7 +14,7 @@ class Model:
     """An object representing a machine learning model.
 
     Attributes:
-        type (str):             Either 'classification' or 'regression'.
+        p_type (str):           Either 'classification' or 'regression'.
         algorithm (str):        Algorithm type (e.g. 'KNN').
         hyperparameters (dict): Hyperparameters (e.g. {'n_neighbors': 5}).
         model (object):         A scikit-learn object for the model.
@@ -41,7 +41,7 @@ class Model:
         if self.algorithm.lower() == 'best':
             return None
         try:
-            return getattr(util, self.algorithm)(random_state=0, **self.hyperparameters)
+            return getattr(util, self.algorithm)(random_state=RANDOM_STATE, **self.hyperparameters)
         except TypeError:
             return getattr(util, self.algorithm)(**self.hyperparameters)
 
@@ -77,7 +77,6 @@ class Model:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
             n_folds (int):        Number of folds to use for cross validation.
-            return_models (bool): Whether to return the scikit-learn model fitted on each training fold.
 
         Returns:
             float: Mean of k-fold cross validation error.
@@ -165,7 +164,8 @@ class Ensemble(Model):
             cv_errors.append(cv_error.mean())
             base_learner_predictions += (np.reshape(y_predicted, [-1, 1]), )
             if self.algorithm != 'best':
-                model.fit(x_train, y_train)
+                if model.fitted is False:
+                    model.fit(x_train, y_train)
 
         x_tr = np.hstack(base_learner_predictions)
         if self.algorithm == 'best':
