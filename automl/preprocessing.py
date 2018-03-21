@@ -48,7 +48,7 @@ def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_en
         processed_data = raw_data
 
     # one-hot encoding for categorical features (only if there exist any)
-    if one_hot_encode and categorical.any():
+    if one_hot_encode and np.array(categorical).any():
         encoder = OneHotEncoder(categorical_features=categorical)
         processed_data = encoder.fit_transform(processed_data).toarray()
         categorical = np.zeros(processed_data.shape[1], dtype=bool)
