@@ -40,9 +40,12 @@ def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_en
             imp_numeric = Imputer(missing_values='NaN', strategy='mean', axis=0, copy=False)
             processed.append(imp_numeric.fit_transform(raw_numeric))
 
-    # data has now been re-ordered so all categorical features appear first
-    categorical = np.array(sorted(categorical, reverse=True))
-    processed_data = np.hstack(tuple(processed))
+        # data has now been re-ordered so all categorical features appear first
+        categorical = np.array(sorted(categorical, reverse=True))
+        processed_data = np.hstack(tuple(processed))
+
+    else:
+        processed_data = raw_data
 
     # one-hot encoding for categorical features (only if there exist any)
     if one_hot_encode and categorical.any():
