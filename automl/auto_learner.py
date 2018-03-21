@@ -128,13 +128,14 @@ class AutoLearner:
         # TODO: Determine rounding scheme to discretize knapsack problem
         weights = t_predicted.astype(int)
         values = (1e3/self.new_row)[0].astype(int)
-        self.best_indices = util.knapsack(weights, values, int(remaining))
+        best_indices = util.knapsack(weights, values, int(remaining))
 
         # add models selected by knapsack problem to ensemble
-        for i in self.best_indices:
+        for i in set(best_indices) - set(self.best_indices):
             m = Model(self.p_type, self.column_headings[i]['algorithm'], self.column_headings[i]['hyperparameters'],
                       verbose=self.verbose)
             self.ensemble.add_base_learner(m)
+        self.best_indices = best_indices
 
         if self.verbose:
             print('\nFitting optimized ensemble...')
