@@ -49,7 +49,7 @@ def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
     return v_opt.x
 
 
-def predict_runtime(size, runtime_matrix, log=True, saved_model=None):
+def predict_runtime(size, runtime_matrix=None, log=True, saved_model=None):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
@@ -76,7 +76,8 @@ def predict_runtime(size, runtime_matrix, log=True, saved_model=None):
     except FileNotFoundError:
         sizes_index = []
         sizes = []
-    # runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
+    if runtime_matrix == None:
+        runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
     runtimes_index = np.array(runtime_matrix.index)
     runtimes = runtime_matrix.values
     if log:
