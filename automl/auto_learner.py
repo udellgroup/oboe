@@ -54,9 +54,9 @@ class AutoLearner:
 
         # error matrix attributes
         # TODO: determine whether to generate new error matrix or use default/subset of default
-        if error_matrix == 'default':
+        if type(error_matrix) == str and error_matrix == 'default':
             error_matrix = pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0)
-        if runtime_matrix == 'default':
+        if type(runtime_matrix) == str and runtime_matrix == 'default':
             runtime_matrix = pd.read_csv(os.path.join(DEFAULTS, 'runtime_matrix.csv'), index_col=0)
         assert util.check_dataframes(error_matrix, runtime_matrix)
         self.column_headings = np.array([eval(heading) for heading in list(error_matrix)])
