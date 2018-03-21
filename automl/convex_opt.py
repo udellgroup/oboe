@@ -8,13 +8,12 @@ import os
 import pandas as pd
 import pickle
 import openml
-from multiprocessing import cpu_count
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 
 
-def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
+def solve(t_predicted, t_max, Y, scalarization='D'):
     """Solve the following optimization problem:
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
@@ -24,13 +23,9 @@ def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
          t_max (float):            maximum runtime of sampled model
          Y (np.ndarray):           matrix representing latent variable weights of error matrix
          scalarization (str):      The scalarization method in experimental design.
-         n_cores (int):            The number of cores as resource limit.
     Returns:
         np.ndarray:                optimal vector v (not truncated to binary values)
     """
-    if n_cores is None:
-        n_cores = cpu_count()
-    
     if scalarization == 'D':
         def objective(v):
             sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
@@ -40,7 +35,7 @@ def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
             return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
 
     def constraint(v):
-        return t_max * n_cores - t_predicted @ v
+        return t_max - t_predicted @ v
 
     n = len(t_predicted)
     v0 = np.full((n, ), 0.5)
