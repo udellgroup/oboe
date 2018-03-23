@@ -65,7 +65,7 @@ def main(args):
     # generate error matrix entries, i.e. compute k-fold cross validation error
     log_file = [file for file in os.listdir(args.save_dir) if file.startswith('log')][0]
     for i, setting in enumerate(settings):
-        model = Model(args.p_type, setting['algorithm'], setting['hyperparameters'], args.verbose)
+        model = Model(args.p_type, setting['algorithm'], setting['hyperparameters'], args.auc, args.verbose)
         start = time.time()
         try:
             cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
@@ -103,6 +103,7 @@ def parse_args(argv):
                         help='Whether to generate print statements on completion.')
     parser.add_argument('--error_matrix', type=str, default=None,
                         help='Existing error matrix. Avoid re-generate its rows.')
+    parser.add_argument('--auc', type=bool, default=False, help='Whether to use AUC instead of BER')
     return parser.parse_args(argv)
 
 

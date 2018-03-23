@@ -22,11 +22,12 @@ class Model:
         verbose (bool):         Whether or not to generate print statements when fitting complete.
     """
 
-    def __init__(self, p_type, algorithm, hyperparameters={}, verbose=False):
+    def __init__(self, p_type, algorithm, hyperparameters={}, auc=False, verbose=False):
         self.p_type = p_type
         self.algorithm = algorithm
         self.hyperparameters = hyperparameters
         self.model = self.instantiate()
+        self.auc = auc
         self.cv_error = np.nan
         self.fitted = False
         self.verbose = verbose
@@ -106,23 +107,16 @@ class Model:
 
         return cv_errors, y_predicted
 
-    def bayesian_optimize(self):
-        """Conducts Bayesian optimization of hyperparameters.
-        """
-        # TODO: implement Bayesian optimization
-        return self.hyperparameters
-
-    def error(self, y_observed, y_predicted):
+    def error(self, y_true, y_predicted):
         """Compute error metric for the model.
 
         Args:
-            y_observed (np.ndarray):  Observed labels.
+            y_true (np.ndarray):      Observed labels.
             y_predicted (np.ndarray): Predicted labels.
-
         Returns:
             float: Error metric
         """
-        return util.error(y_observed, y_predicted, self.p_type)
+        return util.error(y_true, y_predicted, self.p_type, self.auc)
 
 
 class Ensemble(Model):
