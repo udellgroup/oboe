@@ -31,7 +31,6 @@ from model import Model
 
 
 def main(args):
-    print(args)
     # load selected algorithms & hyperparameters from string or JSON file
     assert (args.string is None) != (args.file is None), 'Exactly one of --string and --file must be specified.'
     if args.string:
