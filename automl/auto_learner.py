@@ -57,6 +57,7 @@ class AutoLearner:
 
         # sample column selection
         self.selection_method = selection_method
+        self.v_opt = None
         self.scalarization = scalarization
         self.known_indices = set()
         self.best_indices = set()
@@ -70,6 +71,7 @@ class AutoLearner:
         assert util.check_dataframes(error_matrix, runtime_matrix)
         self.column_headings = np.array([eval(heading) for heading in list(error_matrix)])
         self.error_matrix = error_matrix.values
+        self.X, self.Y = linalg.pca(self.error_matrix, rank=min(self.error_matrix.shape)-1)
         self.runtime_matrix = runtime_matrix.values
         self.new_row = np.zeros((1, self.error_matrix.shape[1]))
 
@@ -88,7 +90,7 @@ class AutoLearner:
             runtime_limit (float): Maximum time to allocate to AutoLearner fitting.
         """
         # set to defaults if not provided
-        rank = rank or linalg.approx_rank(self.error_matrix, threshold=0.03)
+        rank = rank or linalg.approx_rank(self.error_matrix, threshold=0.01)
         runtime_limit = runtime_limit or self.runtime_limit
 
         if self.verbose:
@@ -99,11 +101,10 @@ class AutoLearner:
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
-            _, Y, _ = linalg.pca(self.error_matrix, threshold=None, rank=rank)
+            Y = self.Y[:rank, :]
             # TODO: Is 50/50 allocation of time to sampling & fitting appropriate?
-            v_opt = convex_opt.solve(t_predicted, self.n_cores * runtime_limit/2, Y, self.scalarization)
-            # TODO: Raise threshold? Currently sampling way too many columns
-            known_indices = np.where(v_opt > 0.95)[0]
+            self.v_opt = convex_opt.solve(t_predicted, self.n_cores * runtime_limit/2, Y, self.scalarization)
+            known_indices = np.where(self.v_opt > 0.99)[0]
         else:
             known_indices = np.arange(0, self.new_row.shape[1])
 
@@ -124,22 +125,22 @@ class AutoLearner:
 
         for i, error in enumerate(sample_model_errors):
             self.new_row[:, to_sample[i]] = error.get()[0].mean()
-        self.new_row = linalg.impute(self.error_matrix, self.new_row, known_indices)
-        # update known indices
+        imputed = linalg.impute(self.error_matrix, self.new_row, known_indices, rank=rank)
+
+        # update known indices; impute ONLY unknown entries
         self.known_indices = set(known_indices)
+        unknown = sorted(list(set(range(self.new_row.shape[1])) - self.known_indices))
+        self.new_row[:, unknown] = imputed[:, unknown]
 
         # add every sampled model to ensemble
         if self.giant_ensemble:
             for model in sample_models:
                 self.ensemble.add_base_learner(model)
 
-        # TODO: Add new row to error matrix at the end (might be incorrect?)
-        # self.error_matrix = np.vstack((self.error_matrix, self.new_row))
-
         # solve knapsack problem to select models to add to ensemble
         # TODO: Determine rounding scheme to discretize knapsack problem
         weights = t_predicted.astype(int)
-        values = (1e3/self.new_row)[0].astype(int)
+        values = 1e3*(1-self.new_row)[0].astype(int)
         best_indices = util.knapsack(weights, values, int(remaining))
 
         # add models selected by knapsack problem to ensemble
@@ -162,40 +163,41 @@ class AutoLearner:
     def fit_doubling(self, x_train, y_train):
         """Fit an AutoLearner object, iteratively doubling allowed runtime."""
         t_predicted = convex_opt.predict_runtime(x_train.shape)
-        # TODO: Is there a better way to set initial runtime? (currently approx. sum of 40 fastest algorithms)
-        fastest_40 = np.sort(t_predicted)[:40].sum()
-        t = 2**np.floor(np.log2(fastest_40))
-        k = linalg.approx_rank(self.error_matrix, threshold=0.03)
 
         # split data into training and validation sets
         x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15)
 
-        # first iteration
-        start = time.time()
-        self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
-        error_t = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
-        best_new_row = np.copy(self.new_row)
-        best_ensemble = copy.deepcopy(self.ensemble)
-        k_prev = k
-        t = 2*t
+        ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
+        times = [2**np.floor(np.log2(np.sort(t_predicted)[:4*ranks[0]].sum()))]
+        losses = [1.0]
 
-        # all subsequent iterations
+        v_opt, e_hat, best_idx = [], [], []
+        k, t = ranks[0], times[0]
+        best_new_row, best_ensemble = None, None
+
+        start = time.time()
         while time.time() - start < self.runtime_limit - t:
             self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
+            v_opt.append(self.v_opt)
+            e_hat.append(self.new_row)
+            best_idx.append(self.best_indices)
+            loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+            losses.append(loss)
 
-            # TODO: conduct cross-validation?
-            error_p = error_t
-            error_t = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
-            if error_t > error_p:
-                k = k_prev
+            if loss < min(losses):
+                ranks.append(k+1)
+                best_new_row, best_ensemble = np.copy(self.new_row), copy.deepcopy(self.ensemble)
             else:
-                best_new_row = np.copy(self.new_row)
-                best_ensemble = copy.deepcopy(self.ensemble)
-            t = 2*t
+                ranks.append(k)
+
+            times.append(2*t)
+            k = ranks[-1]
+            t = times[-1]
 
         # after all iterations, restore best model
         self.new_row = best_new_row
         self.ensemble = best_ensemble
+        return {'k': ranks, 't': times, 'l': losses, 'v': v_opt, 'e': e_hat, 'b': best_idx}
 
     def refit(self, x_train, y_train):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
