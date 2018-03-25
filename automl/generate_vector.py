@@ -50,7 +50,7 @@ def main(args):
         dataset_id = filename
 
     # do not generate error matrices twice on one dataset
-    if (args.error_matrix).endswith('.csv'):
+    if args.error_matrix.endswith('.csv'):
         generated_datasets = pd.read_csv(args.error_matrix, index_col=0).index.tolist()
         assert dataset_id not in generated_datasets, 'Already generated.'
 
