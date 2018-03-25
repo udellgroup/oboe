@@ -47,15 +47,15 @@ then
 fi
 
 # no limit for maximum number of processes if no number is given
-if [ "$8" == "" ]
+if [ "$7" == "" ]
 then
-  "$8" = "0"
+  "$7" = "0"
 fi
 
 # default to not using AUC
-if [ "$9" == "" ]
+if [ "$8" == "" ]
 then
-  "$9" = "False"
+  "$8" = "False"
 fi
 
 # strip '/' from end of file path (if there is one)
@@ -63,9 +63,9 @@ SAVE_DIR=${3%/}
 DATA_DIR=${4%/}
 P_TYPE=$5
 JSON_FILE=$6
-ERROR_MATRIX=$7
-MAX_PROCS=$8
-AUC=$9
+MAX_PROCS=$7
+AUC=$8
+ERROR_MATRIX=$9
 
 # location of this script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
