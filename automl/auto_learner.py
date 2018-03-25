@@ -73,6 +73,7 @@ class AutoLearner:
         self.error_matrix = error_matrix.values
         self.X, self.Y, _ = linalg.pca(self.error_matrix, rank=min(self.error_matrix.shape)-1)
         self.runtime_matrix = runtime_matrix.values
+        self.runtime_matrix_df = runtime_matrix #(temporary) the dataframe containing runtime matrix
         self.new_row = np.zeros((1, self.error_matrix.shape[1]))
 
         # ensemble attributes
@@ -96,7 +97,8 @@ class AutoLearner:
         if self.verbose:
             print('Fitting AutoLearner with max. runtime {}s'.format(runtime_limit))
 
-        t_predicted = convex_opt.predict_runtime(x_train.shape)
+        # (temporary) custom runtime matrix
+        t_predicted = convex_opt.predict_runtime(x_train.shape, runtime_matrix=self.runtime_matrix_df)
 
         if self.selection_method == 'qr':
             known_indices = linalg.pivot_columns(self.error_matrix)
