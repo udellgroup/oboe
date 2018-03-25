@@ -99,11 +99,11 @@ def parse_args(argv):
     parser.add_argument('--save_dir', type=str, default='./custom',
                         help='Directory in which to save new error matrix.')
     parser.add_argument('--n_folds', type=int, default=10, help='Number of folds to use for k-fold cross validation.')
-    parser.add_argument('--verbose', type=bool, default=False,
+    parser.add_argument('--verbose', lambda x: x == 'True', default=False,
                         help='Whether to generate print statements on completion.')
     parser.add_argument('--error_matrix', type=str, default=None,
                         help='Existing error matrix. Avoid re-generate its rows.')
-    parser.add_argument('--auc', type=bool, default=False, help='Whether to use AUC instead of BER')
+    parser.add_argument('--auc', type=lambda x: x == 'True', default=False, help='Whether to use AUC instead of BER')
     return parser.parse_args(argv)
 
 
