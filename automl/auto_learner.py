@@ -71,7 +71,7 @@ class AutoLearner:
         assert util.check_dataframes(error_matrix, runtime_matrix)
         self.column_headings = np.array([eval(heading) for heading in list(error_matrix)])
         self.error_matrix = error_matrix.values
-        self.X, self.Y = linalg.pca(self.error_matrix, rank=min(self.error_matrix.shape)-1)
+        self.X, self.Y, _ = linalg.pca(self.error_matrix, rank=min(self.error_matrix.shape)-1)
         self.runtime_matrix = runtime_matrix.values
         self.new_row = np.zeros((1, self.error_matrix.shape[1]))
 
