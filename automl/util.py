@@ -49,17 +49,10 @@ DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regr
             'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
 
 
-def to_matrix(a, num_classes=None):
-    a = a.astype(int)
-    if num_classes is None:
-        num_classes = np.max(a) - np.min(a) + 1
-    r = np.zeros(shape=(a.shape[0], num_classes))
-    r[np.arange(a.shape[0]), a - np.min(a)] = 1
-    return r
+def multiclass_roc_auc_score(y_true, y_predicted, num_classes=None):
+    """Compute multi-class ROC AUC score."""
+    pass
 
-def multiclass_roc_auc_score(y_truth, y_pred, num_classes=None):
-    convert = partial(to_matrix, num_classes=num_classes)
-    return roc_auc_score(convert(y_truth), convert(y_pred))
 
 def error(y_true, y_predicted, p_type, auc=False):
     """Compute error metric for the model; varies based on classification/regression and algorithm type.
