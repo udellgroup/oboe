@@ -37,7 +37,7 @@ class AutoLearner:
     def __init__(self,
                  p_type, algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=mp.cpu_count(), runtime_limit=512,
-                 selection_method='qr', scalarization='D',
+                 selection_method='min_variance', scalarization='D',
                  error_matrix='default', runtime_matrix='default',
                  stacking_alg='Logit', giant_ensemble=False, **stacking_hyperparams):
 
