@@ -4,7 +4,6 @@ Miscellaneous helper functions.
 
 import inspect
 import itertools
-from functools import partial
 import json
 import numpy as np
 import os
@@ -14,6 +13,7 @@ import re
 import sys
 from math import isclose
 from sklearn.metrics import mean_squared_error, roc_auc_score
+from sklearn.preprocessing import OneHotEncoder
 
 # Classification algorithms
 from sklearn.neighbors import KNeighborsClassifier as KNN
@@ -49,9 +49,14 @@ DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regr
             'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
 
 
-def multiclass_roc_auc_score(y_true, y_predicted, num_classes=None):
-    """Compute multi-class ROC AUC score."""
-    pass
+def multiclass_roc_auc_score(y_true, y_pred, n_values='auto'):
+    enc = OneHotEncoder(n_values=n_values)
+    y_true_t = np.array([y_true]).reshape(-1, 1)
+    y_pred_t = np.array([y_pred]).reshape(-1, 1)
+    enc.fit(np.concatenate((y_true_t, y_pred_t), axis=0))
+    y_true_encoded = enc.transform(y_true_t).toarray()
+    y_pred_encoded = enc.transform(y_pred_t).toarray()
+    return roc_auc_score(y_true_encoded, y_pred_encoded)
 
 
 def error(y_true, y_predicted, p_type, auc=False):
