@@ -4,7 +4,6 @@ Miscellaneous helper functions.
 
 import inspect
 import itertools
-from functools import partial
 import json
 import numpy as np
 import os
@@ -14,6 +13,7 @@ import re
 import sys
 from math import isclose
 from sklearn.metrics import mean_squared_error, roc_auc_score
+from sklearn.preprocessing import OneHotEncoder
 
 # Classification algorithms
 from sklearn.neighbors import KNeighborsClassifier as KNN
@@ -48,18 +48,14 @@ ALGORITHMS_R = dict(zip(REG['algorithms'], list(map(lambda name: eval(name), REG
 DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regression': ALGORITHMS_R},
             'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
 
-
-def to_matrix(a, num_classes=None):
-    a = a.astype(int)
-    if num_classes is None:
-        num_classes = np.max(a) - np.min(a) + 1
-    r = np.zeros(shape=(a.shape[0], num_classes))
-    r[np.arange(a.shape[0]), a - np.min(a)] = 1
-    return r
-
-def multiclass_roc_auc_score(y_truth, y_pred, num_classes=None):
-    convert = partial(to_matrix, num_classes=num_classes)
-    return roc_auc_score(convert(y_truth), convert(y_pred))
+def multiclass_roc_auc_score(y_true, y_pred, n_values='auto'):
+    enc = OneHotEncoder(n_values=n_values)
+    y_true_t = np.array([y_true]).reshape(-1, 1)
+    y_pred_t = np.array([y_pred]).reshape(-1, 1)
+    enc.fit(np.concatenate((y_true_t, y_pred_t), axis=0))
+    y_true_encoded = enc.transform(y_true_t).toarray()
+    y_pred_encoded = enc.transform(y_pred_t).toarray()
+    return roc_auc_score(y_true_encoded, y_pred_encoded)
 
 def error(y_true, y_predicted, p_type, auc=False):
     """Compute error metric for the model; varies based on classification/regression and algorithm type.
