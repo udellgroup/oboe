@@ -107,7 +107,7 @@ class RuntimePredictor:
         """Fit polynomial regression on pre-recorded runtimes on datasets."""
         # assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
         for i in set(runtimes_index).difference(set(sizes_index)):
-            dataset=openml.datasets.get_dataset(i)
+            dataset = openml.datasets.get_dataset(i)
             data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,
                                                                       return_categorical_indicator=True)
             if len(sizes) == 0:
