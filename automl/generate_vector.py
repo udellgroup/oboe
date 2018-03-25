@@ -31,6 +31,7 @@ from model import Model
 
 
 def main(args):
+    print(args)
     # load selected algorithms & hyperparameters from string or JSON file
     assert (args.string is None) != (args.file is None), 'Exactly one of --string and --file must be specified.'
     if args.string:
@@ -99,7 +100,7 @@ def parse_args(argv):
     parser.add_argument('--save_dir', type=str, default='./custom',
                         help='Directory in which to save new error matrix.')
     parser.add_argument('--n_folds', type=int, default=10, help='Number of folds to use for k-fold cross validation.')
-    parser.add_argument('--verbose', lambda x: x == 'True', default=False,
+    parser.add_argument('--verbose', type=lambda x: x == 'True', default=False,
                         help='Whether to generate print statements on completion.')
     parser.add_argument('--error_matrix', type=str, default=None,
                         help='Existing error matrix. Avoid re-generate its rows.')
