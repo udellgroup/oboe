@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(name="lowrank-automl",
       version="0.1",
-      author="Yuji Akimoto, Chengrun Yang, Dae Won Kim",
+      author="Yuji Akimoto, Chengrun Yang",
       author_email="ya242@cornell.edu",
       packages=["automl"],
       package_dir={"automl": "automl"},
@@ -14,5 +14,5 @@ setup(name="lowrank-automl",
                         "scipy >= 0.13",
                         "scikit-learn >= 0.18",
                         "pandas >= 0.18",
-                        "pathos >= 0.2.0"]
+                        "mkl"]
       )
