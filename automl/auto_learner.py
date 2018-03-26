@@ -160,7 +160,7 @@ class AutoLearner:
         if self.verbose:
             print('\nAutoLearner fitting complete.')
 
-    def fit_doubling(self, x_train, y_train):
+    def fit_doubling(self, x_train, y_train, verbose=False):
         """Fit an AutoLearner object, iteratively doubling allowed runtime."""
         t_predicted = convex_opt.predict_runtime(x_train.shape)
 
@@ -177,6 +177,8 @@ class AutoLearner:
 
         start = time.time()
         while time.time() - start < self.runtime_limit - t:
+            if verbose:
+                print('Fitting with k={}, t={}'.format(k, t))
             self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
             v_opt.append(self.v_opt)
             e_hat.append(self.new_row)
