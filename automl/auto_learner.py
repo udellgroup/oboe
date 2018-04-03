@@ -33,17 +33,17 @@ class AutoLearner:
         selection_method (str):        Method of selecting entries of new row to sample.
         scalarization (str):           Scalarization of objective for min-variance selection. Either 'D' or 'A'.
 
-        error_matrix (DataFrame):
-        runtime_matrix (DataFrame):
-        column_headings (list):
-        X, Y (np.ndarray):
+        error_matrix (DataFrame):      Error matrix to use for imputation; includes index and headers.
+        runtime_matrix (DataFrame):    Runtime matrix to use for runtime prediction; includes index and headers.
+        column_headings (list):        Column headings of error/runtime matrices; list of dicts.
+        X, Y (np.ndarray):             PCA decomposition of error matrix.
 
-        new_row (np.ndarray):
-        v_opt (np.ndarray):
-        sampled_indices (set):
-        sampled_models (list):
-        fitted_indices (set):
-        fitted_models (list):
+        new_row (np.ndarray):          Predicted row of error matrix.
+        v_opt (np.ndarray):            Solution to experiment design problem.
+        sampled_indices (set):         Indices of new row that have been sampled.
+        sampled_models (list):         List of models that have been sampled (i.e. k-fold fitted).
+        fitted_indices (set):          Indices of new row that have been fitted (i.e. included in enesmble)
+        fitted_models (list):          List of models that have been fitted.
 
         stacking_alg (str):            Algorithm type to use for stacked learner.
     """
