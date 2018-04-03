@@ -5,7 +5,7 @@
 usage () {
     cat <<HELP_USAGE
     Usage:
-    $0  [-m] mode <max_procs> <save_dir> <data_dir> <p_type> <json>
+    $0  [-m] mode <save_dir> <data_dir> <p_type> <json> <err_mtx> <max_procs> <auc>
 
    -m:         mode in which to run, either "generate" or "merge".
    <save_dir>: (g) where to save results / (m) where results are saved.
@@ -14,7 +14,7 @@ usage () {
    <json>:     (g) path to model configurations json file.
    <err_mtx>   (g) error matrix already generated.
    <max_procs>:(g) maximum number of processes assigned to error matrix generation.
-
+   <auc>:      (g) whether to use AUC instead of BER
 HELP_USAGE
 }
 
@@ -47,9 +47,15 @@ then
 fi
 
 # no limit for maximum number of processes if no number is given
+if [ "$7" == "" ]
+then
+  "$7" = "0"
+fi
+
+# default to not using AUC
 if [ "$8" == "" ]
 then
-  "$8" = "0"
+  "$8" = "False"
 fi
 
 # strip '/' from end of file path (if there is one)
@@ -57,8 +63,9 @@ SAVE_DIR=${3%/}
 DATA_DIR=${4%/}
 P_TYPE=$5
 JSON_FILE=$6
-ERROR_MATRIX=$7
-MAX_PROCS=$8
+MAX_PROCS=$7
+AUC=$8
+ERROR_MATRIX=$9
 
 # location of this script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -71,7 +78,8 @@ then
   echo "Error matrix generation started at ${time}" >> ${SAVE_DIR}/${time}/log_${time}.txt
 
   ls ${DATA_DIR}/*.csv | xargs -i --max-procs=${MAX_PROCS} bash -c \
-  "echo {}; python ${DIR}/generate_vector.py '${P_TYPE}' {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${time} --error_matrix=${ERROR_MATRIX}"
+  "python ${DIR}/generate_vector.py '${P_TYPE}' {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${time} \
+  --error_matrix=${ERROR_MATRIX} --auc=${AUC}"
 fi
 
 # merge mode

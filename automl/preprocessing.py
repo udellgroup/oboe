@@ -14,7 +14,7 @@ def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_en
 
     Args:
         raw_data (np.ndarray):    raw features of the n-by-d dataset, without indices and headings.
-        categorical (np.ndarray): a d-dimensional boolean array indicating whether each raw feature is categorical.
+        categorical (list):       a boolean list of length d indicating whether each raw feature is categorical.
         impute (bool):            whether to impute missing entries or not.
         standardize (bool):       whether to standardize each feature or not.
         one_hot_encode (bool):    whether to use one hot encoding to pre-process categorical features or not.
@@ -27,7 +27,7 @@ def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_en
     # whether to impute missing entries
     if impute:
         # if there are any categorical features
-        if categorical.any():
+        if np.array(categorical).any():
             raw_categorical = raw_data[:, categorical]
             # impute missing entries in categorical features using the most frequent number
             imp_categorical = Imputer(missing_values='NaN', strategy='most_frequent', axis=0, copy=False)
@@ -40,12 +40,15 @@ def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_en
             imp_numeric = Imputer(missing_values='NaN', strategy='mean', axis=0, copy=False)
             processed.append(imp_numeric.fit_transform(raw_numeric))
 
-    # data has now been re-ordered so all categorical features appear first
-    categorical = np.array(sorted(categorical, reverse=True))
-    processed_data = np.hstack(tuple(processed))
+        # data has now been re-ordered so all categorical features appear first
+        categorical = np.array(sorted(categorical, reverse=True))
+        processed_data = np.hstack(tuple(processed))
+
+    else:
+        processed_data = raw_data
 
     # one-hot encoding for categorical features (only if there exist any)
-    if one_hot_encode and categorical.any():
+    if one_hot_encode and np.array(categorical).any():
         encoder = OneHotEncoder(categorical_features=categorical)
         processed_data = encoder.fit_transform(processed_data).toarray()
         categorical = np.zeros(processed_data.shape[1], dtype=bool)

@@ -4,6 +4,7 @@ Parent class for all ML models.
 
 import numpy as np
 import util
+from scipy.stats import mode
 from sklearn.model_selection import KFold
 
 
@@ -14,22 +15,25 @@ class Model:
     """An object representing a machine learning model.
 
     Attributes:
-        type (str): Either 'classification' or 'regression'.
-        algorithm (str): Algorithm type (e.g. 'KNN').
+        p_type (str):           Either 'classification' or 'regression'.
+        algorithm (str):        Algorithm type (e.g. 'KNN').
         hyperparameters (dict): Hyperparameters (e.g. {'n_neighbors': 5}).
-        model (object): A scikit-learn object for the model.
-        fitted (bool): Whether or not the model has been trained.
-        verbose (bool): Whether or not to generate print statements when fitting complete.
+        model (object):         A scikit-learn object for the model.
+        fitted (bool):          Whether or not the model has been trained.
+        verbose (bool):         Whether or not to generate print statements when fitting complete.
     """
 
-    def __init__(self, p_type, algorithm, hyperparameters={}, verbose=False):
+    def __init__(self, p_type, algorithm, hyperparameters={}, verbose=False, index=None):
         self.p_type = p_type
         self.algorithm = algorithm
         self.hyperparameters = hyperparameters
         self.model = self.instantiate()
         self.cv_error = np.nan
+        self.cv_predictions = None
+        self.sampled = False
         self.fitted = False
         self.verbose = verbose
+        self.index = index
 
     def instantiate(self):
         """Creates a scikit-learn object of specified algorithm type and with specified hyperparameters.
@@ -37,19 +41,21 @@ class Model:
         Returns:
             object: A scikit-learn object.
         """
-        # TODO: is random state necessary (?)
+        if self.algorithm.lower() == 'greedy':
+            return None
         try:
-            return getattr(util, self.algorithm)(random_state=0, **self.hyperparameters)
+            return getattr(util, self.algorithm)(random_state=RANDOM_STATE, **self.hyperparameters)
         except TypeError:
             return getattr(util, self.algorithm)(**self.hyperparameters)
 
-    def fit(self, x_train, y_train):
+    def fit(self, x_train, y_train, runtime_limit=None):
         """Fits the model on training data. Note that this function is only used once a model has been identified as a
         model to be included in the final ensemble.
 
         Args:
-            x_train (np.ndarray): Features of the training dataset.
-            y_train (np.ndarray): Labels of the training dataset.
+            x_train (np.ndarray):   Features of the training dataset.
+            y_train (np.ndarray):   Labels of the training dataset.
+            runtime_limit (float):  Maximum amount of time to allocate to fitting.
         """
         self.model.fit(x_train, y_train)
         self.fitted = True
@@ -74,7 +80,7 @@ class Model:
         Args:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
-            n_folds (int): Number of folds to use for cross validation.
+            n_folds (int):        Number of folds to use for cross validation.
 
         Returns:
             float: Mean of k-fold cross validation error.
@@ -99,69 +105,102 @@ class Model:
             cv_errors[i] = self.error(y_predicted[test_idx], y_te)
 
         self.cv_error = cv_errors.mean()
+        self.cv_predictions = y_predicted
+        self.sampled = True
         if self.verbose:
             print("{} {} complete.".format(self.algorithm, self.hyperparameters))
 
         return cv_errors, y_predicted
 
-    def bayesian_optimize(self):
-        """Conducts Bayesian optimization of hyperparameters.
-        """
-        # TODO: implement Bayesian optimization
-        return self.hyperparameters
-
-    def error(self, y_observed, y_predicted):
+    def error(self, y_true, y_predicted):
         """Compute error metric for the model.
 
         Args:
-            y_observed (np.ndarray): Observed labels.
+            y_true (np.ndarray):      Observed labels.
             y_predicted (np.ndarray): Predicted labels.
-
         Returns:
             float: Error metric
         """
-        return util.error(y_observed, y_predicted, self.p_type)
+        return util.error(y_true, y_predicted, self.p_type)
 
 
 class Ensemble(Model):
     """An object representing an ensemble of machine learning models.
 
     Attributes:
-        p_type (str): Either 'classification' or 'regression'.
-        algorithm (str): Algorithm type (e.g. 'Logit').
+        p_type (str):           Either 'classification' or 'regression'.
+        algorithm (str):        Algorithm type (e.g. 'Logit').
         hyperparameters (dict): Hyperparameters (e.g. {'C': 1.0}).
-        model (object): A scikit-learn object for the model.
+        model (object):         A scikit-learn object for the model.
     """
 
     def __init__(self, p_type, algorithm, hyperparameters={}):
         super().__init__(p_type, algorithm, hyperparameters)
+        self.candidate_learners = []
         self.base_learners = []
+        self.second_layer_features = None
 
-    def add_base_learner(self, model):
-        """Add weak learner to ensemble.
-
-        Args:
-            model (Model): Model object to be added to the ensemble.
+    def select_base_learners(self, y_train, fitted_base_learners):
+        """Select base learners from candidate learners based on ensembling algorithm.
         """
-        self.base_learners.append(model)
+        cv_errors = np.array([m.cv_error for m in self.candidate_learners])
+        if self.algorithm == 'greedy':
+            x_tr = ()
+            # initial number of models in ensemble
+            n_initial = 3
+            for i in np.argsort(cv_errors)[:n_initial]:
+                x_tr += (self.candidate_learners[i].cv_predictions.reshape(-1, 1), )
+                pre_fitted = fitted_base_learners[self.candidate_learners[i].index]
+                if pre_fitted is not None:
+                    self.base_learners.append(pre_fitted)
+                else:
+                    self.base_learners.append(self.candidate_learners[i])
 
-    def fit(self, x_train, y_train):
+            x_tr = np.hstack(x_tr)
+            candidates = list(np.argsort(cv_errors)[n_initial:])
+            error = util.error(y_train, mode(x_tr, axis=1)[0], self.p_type)
+
+            while True:
+                looped = True
+                for i, idx in enumerate(candidates):
+                    slm = np.hstack((x_tr, self.candidate_learners[i].cv_predictions.reshape(-1, 1)))
+                    err = util.error(y_train, mode(slm, axis=1)[0], self.p_type)
+                    if err < error:
+                        x_tr = slm
+                        pre_fitted = fitted_base_learners[self.candidate_learners[i].index]
+                        if pre_fitted is not None:
+                            self.base_learners.append(pre_fitted)
+                        else:
+                            self.base_learners.append(self.candidate_learners[i])
+                        del candidates[i]
+                        looped = False
+                        break
+                if looped:
+                    break
+            self.second_layer_features = x_tr
+        else:
+            self.base_learners = self.candidate_learners
+            x_tr = [m.cv_predictions.reshape(-1, 1) for m in self.candidate_learners]
+            self.second_layer_features = np.hstack(tuple(x_tr))
+
+    def fit(self, x_train, y_train, runtime_limit=None, fitted_base_learners=None):
         """Fit ensemble model on training data.
 
         Args:
-            x_train (np.ndarray): Features of the training dataset.
-            y_train (np.ndarray): Labels of the training dataset.
+            x_train (np.ndarray):        Features of the training dataset.
+            y_train (np.ndarray):        Labels of the training dataset.
+            runtime_limit (float):       Maximum runtime to be allocated to fitting.
+            fitted_base_learners (list): A list of already fitted models.
         """
-        assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
+        self.select_base_learners(y_train, fitted_base_learners)
 
-        base_learner_predictions = ()
+        # TODO: parallelize training over base learners
         for model in self.base_learners:
-            _, y_predicted = model.kfold_fit_validate(x_train, y_train, n_folds=3)
-            base_learner_predictions += (np.reshape(y_predicted, [-1, 1]), )
-            model.fit(x_train, y_train)
+            if not model.fitted:
+                model.fit(x_train, y_train)
 
-        x_tr = np.hstack(base_learner_predictions)
-        self.model.fit(x_tr, y_train)
+        if self.algorithm != 'greedy':
+            self.model.fit(self.second_layer_features, y_train)
         self.fitted = True
 
     def predict(self, x_test):
@@ -169,9 +208,8 @@ class Ensemble(Model):
 
         Args:
             x_test (np.ndarray): Features of the test dataset.
-
         Returns:
-            np.array: Predicted features of the test dataset.
+            np.array: Predicted labels of the test dataset.
         """
         assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
 
@@ -179,6 +217,9 @@ class Ensemble(Model):
         for model in self.base_learners:
             y_predicted = np.reshape(model.predict(x_test), [-1, 1])
             base_learner_predictions += (y_predicted, )
-
         x_te = np.hstack(base_learner_predictions)
-        return self.model.predict(x_te)
+        if self.algorithm == 'greedy':
+            return mode(x_te, axis=1)[0].reshape((1, -1))
+        else:
+            return self.model.predict(x_te)
+

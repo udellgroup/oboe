@@ -28,6 +28,8 @@ import re
 import time
 import util
 from model import Model
+import mkl
+mkl.set_num_threads(1)
 
 
 def main(args):
@@ -50,7 +52,7 @@ def main(args):
         dataset_id = filename
 
     # do not generate error matrices twice on one dataset
-    if args.error_matrix is not None:
+    if args.error_matrix.endswith('.csv'):
         generated_datasets = pd.read_csv(args.error_matrix, index_col=0).index.tolist()
         assert dataset_id not in generated_datasets, 'Already generated.'
 
@@ -65,7 +67,7 @@ def main(args):
     # generate error matrix entries, i.e. compute k-fold cross validation error
     log_file = [file for file in os.listdir(args.save_dir) if file.startswith('log')][0]
     for i, setting in enumerate(settings):
-        model = Model(args.p_type, setting['algorithm'], setting['hyperparameters'], args.verbose)
+        model = Model(args.p_type, setting['algorithm'], setting['hyperparameters'], args.auc, args.verbose)
         start = time.time()
         try:
             cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
@@ -99,10 +101,11 @@ def parse_args(argv):
     parser.add_argument('--save_dir', type=str, default='./custom',
                         help='Directory in which to save new error matrix.')
     parser.add_argument('--n_folds', type=int, default=10, help='Number of folds to use for k-fold cross validation.')
-    parser.add_argument('--verbose', type=bool, default=False,
+    parser.add_argument('--verbose', type=lambda x: x == 'True', default=False,
                         help='Whether to generate print statements on completion.')
     parser.add_argument('--error_matrix', type=str, default=None,
                         help='Existing error matrix. Avoid re-generate its rows.')
+    parser.add_argument('--auc', type=lambda x: x == 'True', default=False, help='Whether to use AUC instead of BER')
     return parser.parse_args(argv)
 
 

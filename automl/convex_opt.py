@@ -8,13 +8,12 @@ import os
 import pandas as pd
 import pickle
 import openml
-from multiprocessing import cpu_count
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso
 
 
-def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
+def solve(t_predicted, t_max, Y, scalarization='D'):
     """Solve the following optimization problem:
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
@@ -24,13 +23,9 @@ def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
          t_max (float):            maximum runtime of sampled model
          Y (np.ndarray):           matrix representing latent variable weights of error matrix
          scalarization (str):      The scalarization method in experimental design.
-         n_cores (int):            The number of cores as resource limit.
     Returns:
         np.ndarray:                optimal vector v (not truncated to binary values)
     """
-    if n_cores == None:
-        n_cores = cpu_count()
-    
     if scalarization == 'D':
         def objective(v):
             sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
@@ -40,7 +35,7 @@ def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
             return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
 
     def constraint(v):
-        return t_max * n_cores - t_predicted @ v
+        return t_max - t_predicted @ v
 
     n = len(t_predicted)
     v0 = np.full((n, ), 0.5)
@@ -49,11 +44,12 @@ def solve(t_predicted, t_max, Y, scalarization='D', n_cores=None):
     return v_opt.x
 
 
-def predict_runtime(size, log=True, saved_model=None):
+def predict_runtime(size, runtime_matrix=None, log=True, saved_model=None):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
-        size (np.ndarray): 1-d array specifying dataset size as [n_rows, n_columns]
+        size (tuple): tuple specifying dataset size as [n_rows, n_columns]
+        runtime_matrix (pandas.core.frame.DataFrame): The DataFame containing runtime.
         log (Boolean): whether to take logarithms of runtime when fitting.
         saved_model (str): path to pre-trained model; defaults to None
     Returns:
@@ -75,7 +71,8 @@ def predict_runtime(size, log=True, saved_model=None):
     except FileNotFoundError:
         sizes_index = []
         sizes = []
-    runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
+    if runtime_matrix is None:
+        runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
     runtimes_index = np.array(runtime_matrix.index)
     runtimes = runtime_matrix.values
     if log:
@@ -103,15 +100,16 @@ class RuntimePredictor:
     def __init__(self, degree, sizes, sizes_index, runtimes, runtimes_index):
         self.degree = degree
         self.n_models = runtimes.shape[1]
-        self.models = [None, ] * self.n_models
+        self.models = [None] * self.n_models
         self.fit(sizes, sizes_index, runtimes, runtimes_index)
 
     def fit(self, sizes, sizes_index, runtimes, runtimes_index):
         """Fit polynomial regression on pre-recorded runtimes on datasets."""
-#        assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
+        # assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
         for i in set(runtimes_index).difference(set(sizes_index)):
-            dataset=openml.datasets.get_dataset(i)
-            data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,return_categorical_indicator=True)
+            dataset = openml.datasets.get_dataset(i)
+            data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,
+                                                                      return_categorical_indicator=True)
             if len(sizes) == 0:
                 sizes = np.array([data_numeric.shape])
                 sizes_index = np.array(i)
@@ -127,6 +125,7 @@ class RuntimePredictor:
         for i in range(self.n_models):
             runtime = runtimes[:, i]
             self.models[i] = LinearRegression().fit(sizes_train_poly, runtime)
+            # self.models[i] = Lasso().fit(sizes_train_poly, runtime)
 
     def predict(self, size):
         """Predict runtime of all model settings on a dataset of given size.
