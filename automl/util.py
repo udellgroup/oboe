@@ -58,7 +58,6 @@ def error(y_true, y_predicted, p_type):
         y_true (np.ndarray):      Observed labels.
         y_predicted (np.ndarray): Predicted labels.
         p_type (str):             Type of problem. One of {'classification', 'regression'}
-        auc (bool):               Whether to use AUC instead of balanced error
     Returns:
         float: Error metric.
     """
