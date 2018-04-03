@@ -10,7 +10,7 @@ import pickle
 import openml
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso
 
 
 def solve(t_predicted, t_max, Y, scalarization='D'):
@@ -125,6 +125,7 @@ class RuntimePredictor:
         for i in range(self.n_models):
             runtime = runtimes[:, i]
             self.models[i] = LinearRegression().fit(sizes_train_poly, runtime)
+            # self.models[i] = Lasso().fit(sizes_train_poly, runtime)
 
     def predict(self, size):
         """Predict runtime of all model settings on a dataset of given size.

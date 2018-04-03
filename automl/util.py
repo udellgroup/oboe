@@ -12,8 +12,7 @@ import pkg_resources
 import re
 import sys
 from math import isclose
-from sklearn.metrics import mean_squared_error, roc_auc_score
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import mean_squared_error
 
 # Classification algorithms
 from sklearn.neighbors import KNeighborsClassifier as KNN
@@ -49,17 +48,7 @@ DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regr
             'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
 
 
-def multiclass_roc_auc_score(y_true, y_pred, n_values='auto'):
-    enc = OneHotEncoder(n_values=n_values)
-    y_true_t = np.array([y_true]).reshape(-1, 1)
-    y_pred_t = np.array([y_pred]).reshape(-1, 1)
-    enc.fit(np.concatenate((y_true_t, y_pred_t), axis=0))
-    y_true_encoded = enc.transform(y_true_t).toarray()
-    y_pred_encoded = enc.transform(y_pred_t).toarray()
-    return roc_auc_score(y_true_encoded, y_pred_encoded)
-
-
-def error(y_true, y_predicted, p_type, auc=False):
+def error(y_true, y_predicted, p_type):
     """Compute error metric for the model; varies based on classification/regression and algorithm type.
     BER (Balanced Error Rate): For classification.
                               1/n * sum (0.5*(true positives/predicted positives + true negatives/predicted negatives))
@@ -74,11 +63,11 @@ def error(y_true, y_predicted, p_type, auc=False):
         float: Error metric.
     """
 
-    assert p_type in ['classification', 'regression'], "Please specify a valid type."
+    assert p_type in {'classification', 'regression'}, "Please specify a valid type."
+    y_true = np.squeeze(y_true)
+    y_predicted = np.squeeze(y_predicted)
 
     if p_type == 'classification':
-        if auc:
-            return multiclass_roc_auc_score(y_true, y_predicted)
         errors = []
         epsilon = 1e-15
         for i in np.unique(y_true):
@@ -97,7 +86,7 @@ def invalid_args(func, arglist):
     """Check if args is a valid list of arguments to be passed to the function func.
 
     Args:
-        func (function): Function to check arguments for.
+        func (function): Function to check arguments for
         arglist (list):  Proposed arguments
     Returns:
         set: Set of arguments in args that are invalid (returns empty set if there are none).
@@ -165,7 +154,6 @@ def knapsack(weights, values, capacity):
     Returns:
         set: list of selected indices
     """
-    # TODO: how precisely to round runtimes? Handle rounding inside/outside this method?
     assert len(weights) == len(values), "Weights & values must have same shape."
     assert type(capacity) == int, "Capacity must be an integer."
     n = len(weights)
@@ -192,6 +180,14 @@ def knapsack(weights, values, capacity):
 
 
 def check_dataframes(m1, m2):
+    """Check if 2 dataframes have the same shape and share the same index column.
+
+    Args:
+        m1 (DataFrame): first dataframe
+        m2 (DataFrame): second dataframe
+    Returns:
+        bool:           Whether the conditions are satisfied
+    """
     assert m1.shape == m2.shape
     assert set(m1.index) == set(m2.index)
     return True
