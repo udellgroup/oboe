@@ -16,6 +16,8 @@ from model import Model, Ensemble
 from sklearn.model_selection import train_test_split
 
 DEFAULTS = pkg_resources.resource_filename(__name__, 'defaults')
+ERROR_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0)
+RUNTIME_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'runtime_matrix.csv'), index_col=0)
 
 
 class AutoLearner:
@@ -78,8 +80,8 @@ class AutoLearner:
 
         # error matrix attributes
         # TODO: determine whether to generate new error matrix or use default/subset of default
-        self.error_matrix = error_matrix or pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0)
-        self.runtime_matrix = runtime_matrix or pd.read_csv(os.path.join(DEFAULTS, 'runtime_matrix.csv'), index_col=0)
+        self.error_matrix = ERROR_MATRIX if error_matrix is None else error_matrix
+        self.runtime_matrix = RUNTIME_MATRIX if runtime_matrix is None else runtime_matrix
         assert util.check_dataframes(self.error_matrix, self.runtime_matrix)
         self.column_headings = np.array([eval(heading) for heading in list(self.error_matrix)])
         self.X, self.Y, _ = linalg.pca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
@@ -209,7 +211,6 @@ class AutoLearner:
 
         v_opt, e_hat, actual_times, ensembles = [], [], [], []
         k, t = ranks[0], times[0]
-        best_new_row, best_ensemble = None, None
 
         start = time.time()
         counter, best = 0, 0
