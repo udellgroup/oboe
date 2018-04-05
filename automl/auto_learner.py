@@ -207,7 +207,7 @@ class AutoLearner:
         t_predicted = convex_opt.predict_runtime(x_train.shape)
 
         # split data into training and validation sets
-        x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15)
+        x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.33)
 
         ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
         times = [2**np.floor(np.log2(np.sort(t_predicted)[:4*ranks[0]].sum()))]
