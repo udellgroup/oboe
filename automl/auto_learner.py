@@ -41,7 +41,6 @@ class AutoLearner:
         X, Y (np.ndarray):             PCA decomposition of error matrix.
 
         new_row (np.ndarray):          Predicted row of error matrix.
-        v_opt (np.ndarray):            Solution to experiment design problem.
         sampled_indices (set):         Indices of new row that have been sampled.
         sampled_models (list):         List of models that have been sampled (i.e. k-fold fitted).
         fitted_indices (set):          Indices of new row that have been fitted (i.e. included in enesmble)
@@ -88,14 +87,15 @@ class AutoLearner:
 
         # sampled & fitted models
         self.new_row = np.zeros((1, self.error_matrix.shape[1]))
-        self.v_opt = None
         self.sampled_indices = set()
         self.sampled_models = [None] * self.error_matrix.shape[1]
         self.fitted_indices = set()
         self.fitted_models = [None] * self.error_matrix.shape[1]
 
         # ensemble attributes
-        self.ensemble = Ensemble(self.p_type, stacking_alg, stacking_hyperparams)
+        self.stacking_alg = stacking_alg
+        self.stacking_hyperparams = stacking_hyperparams
+        self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
 
     def fit(self, x_train, y_train, rank=None, runtime_limit=None):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
@@ -118,9 +118,11 @@ class AutoLearner:
         if self.selection_method == 'qr':
             to_sample = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
-            Y = self.Y[:rank, :]
-            self.v_opt = convex_opt.solve(t_predicted, self.n_cores * runtime_limit/2, Y, self.scalarization)
-            to_sample = np.where(self.v_opt > 0.9)[0]
+            # select algorithms to sample only from subset of algorithms that will run in allocated time
+            valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
+            Y = self.Y[:rank, valid]
+            v_opt = convex_opt.solve(t_predicted[valid], self.n_cores * runtime_limit/2, Y, self.scalarization)
+            to_sample = valid[np.where(v_opt > 0.9)[0]]
         else:
             to_sample = np.arange(0, self.new_row.shape[1])
 
@@ -151,8 +153,9 @@ class AutoLearner:
             self.new_row[:, to_sample[i]] = cv_error.mean()
             self.sampled_models[to_sample[i]] = sample_models[i]
         imputed = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+        # self.new_row = imputed
 
-        # impute ONLY unknown entries
+        # impute ONLY unknown entries ??
         unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
         self.new_row[:, unknown] = imputed[:, unknown]
 
@@ -185,6 +188,7 @@ class AutoLearner:
             self.new_row[:, to_fit[i]] = cv_error.mean()
             self.sampled_models[to_fit[i]] = candidate_models[i]
             self.ensemble.candidate_learners.append(candidate_models[i])
+        # self.new_row = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
 
         if self.verbose:
             print('\nFitting ensemble of max. size {}...'.format(len(self.ensemble.candidate_learners)))
@@ -209,7 +213,7 @@ class AutoLearner:
         times = [2**np.floor(np.log2(np.sort(t_predicted)[:4*ranks[0]].sum()))]
         losses = [1.0]
 
-        v_opt, e_hat, actual_times, ensembles = [], [], [], []
+        e_hat, actual_times, sampled, ensembles = [], [], [], []
         k, t = ranks[0], times[0]
 
         start = time.time()
@@ -218,15 +222,18 @@ class AutoLearner:
             if verbose:
                 print('Fitting with k={}, t={}'.format(k, t))
             t0 = time.time()
+            self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
             self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
-            ensembles.append(self.ensemble)
-            actual_times.append(time.time() - t0)
-            v_opt.append(self.v_opt)
-            e_hat.append(self.new_row)
             loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+
+            # TEMPORARY: Record intermediate results
+            e_hat.append(np.copy(self.new_row))
+            actual_times.append(time.time() - start)
+            sampled.append(self.sampled_indices)
+            ensembles.append(self.ensemble)
             losses.append(loss)
 
-            if loss < min(losses):
+            if loss == min(losses):
                 ranks.append(k+1)
                 best = counter
             else:
@@ -240,7 +247,8 @@ class AutoLearner:
         # after all iterations, restore best model
         self.new_row = e_hat[best]
         self.ensemble = ensembles[best]
-        return {'k': ranks, 't': times, 'l': losses, 'v': v_opt, 'e': e_hat, 'tt': actual_times,
+        return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
+                'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
                 'models': ensembles}
 
     def refit(self, x_train, y_train):

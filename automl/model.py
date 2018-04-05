@@ -157,7 +157,7 @@ class Ensemble(Model):
                     self.base_learners.append(self.candidate_learners[i])
 
             x_tr = np.hstack(x_tr)
-            candidates = list(np.argsort(cv_errors)[n_initial:])
+            candidates = list(np.argsort(cv_errors))
             error = util.error(y_train, mode(x_tr, axis=1)[0], self.p_type)
 
             while True:
@@ -166,13 +166,13 @@ class Ensemble(Model):
                     slm = np.hstack((x_tr, self.candidate_learners[i].cv_predictions.reshape(-1, 1)))
                     err = util.error(y_train, mode(slm, axis=1)[0], self.p_type)
                     if err < error:
+                        error = err
                         x_tr = slm
                         pre_fitted = fitted_base_learners[self.candidate_learners[i].index]
                         if pre_fitted is not None:
                             self.base_learners.append(pre_fitted)
                         else:
                             self.base_learners.append(self.candidate_learners[i])
-                        del candidates[i]
                         looped = False
                         break
                 if looped:
