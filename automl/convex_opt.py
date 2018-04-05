@@ -10,7 +10,7 @@ import pickle
 import openml
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.linear_model import LinearRegression
 
 
 def solve(t_predicted, t_max, Y, scalarization='D'):
@@ -44,14 +44,15 @@ def solve(t_predicted, t_max, Y, scalarization='D'):
     return v_opt.x
 
 
-def predict_runtime(size, runtime_matrix=None, log=True, saved_model=None):
+def predict_runtime(size, runtime_matrix=None, log=True, saved_model=None, save=False):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
-        size (tuple): tuple specifying dataset size as [n_rows, n_columns]
-        runtime_matrix (pandas.core.frame.DataFrame): The DataFame containing runtime.
-        log (Boolean): whether to take logarithms of runtime when fitting.
-        saved_model (str): path to pre-trained model; defaults to None
+        size (tuple):               tuple specifying dataset size as [n_rows, n_columns]
+        runtime_matrix (DataFrame): the DataFame containing runtime.
+        log (bool):                 whether to take logarithms of runtime when fitting.
+        saved_model (str):          path to pre-trained model; defaults to None
+        save (bool):                whether to save pre-trained model
     Returns:
         np.ndarray:        1-d array of predicted runtimes
     """
@@ -79,8 +80,9 @@ def predict_runtime(size, runtime_matrix=None, log=True, saved_model=None):
         model = RuntimePredictor(3, sizes, sizes_index, np.log(runtimes), runtimes_index)
     else:
         model = RuntimePredictor(3, sizes, sizes_index, runtimes, runtimes_index)
-    with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
-        pickle.dump(model, file)
+    if save:
+        with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
+            pickle.dump(model, file)
 
     if log:
         return np.exp(model.predict(shape))

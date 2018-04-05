@@ -247,7 +247,7 @@ class AutoLearner:
         # after all iterations, restore best model
         self.new_row = e_hat[best]
         self.ensemble = ensembles[best]
-        return {'ranks': ranks[:-1], 'times': times, 'runtime_limits': times[:-1], 'validation_loss': losses,
+        return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
                 'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
                 'models': ensembles}
 
