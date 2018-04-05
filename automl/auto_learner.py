@@ -43,7 +43,7 @@ class AutoLearner:
         new_row (np.ndarray):          Predicted row of error matrix.
         sampled_indices (set):         Indices of new row that have been sampled.
         sampled_models (list):         List of models that have been sampled (i.e. k-fold fitted).
-        fitted_indices (set):          Indices of new row that have been fitted (i.e. included in enesmble)
+        fitted_indices (set):          Indices of new row that have been fitted (i.e. included in ensemble)
         fitted_models (list):          List of models that have been fitted.
 
         stacking_alg (str):            Algorithm type to use for stacked learner.
