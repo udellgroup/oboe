@@ -44,13 +44,12 @@ def solve(t_predicted, t_max, Y, scalarization='D'):
     return v_opt.x
 
 
-def predict_runtime(size, runtime_matrix=None, log=True, saved_model=None, save=False):
+def predict_runtime(size, runtime_matrix=None, saved_model=None, save=False):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
         size (tuple):               tuple specifying dataset size as [n_rows, n_columns]
         runtime_matrix (DataFrame): the DataFame containing runtime.
-        log (bool):                 whether to take logarithms of runtime when fitting.
         saved_model (str):          path to pre-trained model; defaults to None
         save (bool):                whether to save pre-trained model
     Returns:
@@ -76,18 +75,12 @@ def predict_runtime(size, runtime_matrix=None, log=True, saved_model=None, save=
         runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
     runtimes_index = np.array(runtime_matrix.index)
     runtimes = runtime_matrix.values
-    if log:
-        model = RuntimePredictor(3, sizes, sizes_index, np.log(runtimes), runtimes_index)
-    else:
-        model = RuntimePredictor(3, sizes, sizes_index, runtimes, runtimes_index)
+    model = RuntimePredictor(3, sizes, sizes_index, np.log(runtimes), runtimes_index)
     if save:
         with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
             pickle.dump(model, file)
 
-    if log:
-        return np.exp(model.predict(shape))
-    else:
-        return model.predict(shape)
+    return np.exp(model.predict(shape))
 
 
 class RuntimePredictor:
