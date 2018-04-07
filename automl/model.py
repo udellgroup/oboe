@@ -90,7 +90,7 @@ class Model:
         cv_errors = np.empty(n_folds)
         kf = StratifiedKFold(n_folds, shuffle=True, random_state=RANDOM_STATE)
 
-        for i, (train_idx, test_idx) in enumerate(kf.split(x_train)):
+        for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
             x_tr = x_train[train_idx, :]
             y_tr = y_train[train_idx]
             x_te = x_train[test_idx, :]
