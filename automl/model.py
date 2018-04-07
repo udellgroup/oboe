@@ -5,7 +5,7 @@ Parent class for all ML models.
 import numpy as np
 import util
 from scipy.stats import mode
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 
 
 RANDOM_STATE = 0
@@ -88,7 +88,7 @@ class Model:
         """
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
-        kf = KFold(n_folds, shuffle=True, random_state=RANDOM_STATE)
+        kf = StratifiedKFold(n_folds, shuffle=True, random_state=RANDOM_STATE)
 
         for i, (train_idx, test_idx) in enumerate(kf.split(x_train)):
             x_tr = x_train[train_idx, :]
