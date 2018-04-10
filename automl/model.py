@@ -88,7 +88,7 @@ class Model:
         """
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
-        kf = StratifiedKFold(n_folds, shuffle=True, random_state=RANDOM_STATE)
+        kf = StratifiedKFold(n_folds, shuffle=True)
 
         for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
             x_tr = x_train[train_idx, :]
