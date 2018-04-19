@@ -67,6 +67,7 @@ MAX_PROCS=$7
 AUC=$8
 ERROR_MATRIX=$9
 
+
 # location of this script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -75,6 +76,7 @@ if [ "${mode}" == "generate" ]
 then
   time=`date +%Y%m%d%H%M`
   mkdir -p ${SAVE_DIR}/${time}
+  echo -e "SAVE_DIR=${SAVE_DIR}\nDATA_DIR=${DATA_DIR}\nP_TYPE=${P_TYPE}\nJSON_FILE=${JSON_FILE}\nAUC=${AUC}\nERROR_MATRIX=${ERROR_MATRIX}\n" >> ${SAVE_DIR}/${time}/configurations.txt
   echo "Error matrix generation started at ${time}" >> ${SAVE_DIR}/${time}/log_${time}.txt
 
   ls ${DATA_DIR}/*.csv | xargs -i --max-procs=${MAX_PROCS} bash -c \
