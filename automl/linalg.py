@@ -51,6 +51,9 @@ def pca(a, rank=None, threshold=None):
         rank = approx_rank(a, threshold)
     std = np.std(a, axis=0)
     u, s, vt = svds(a, k=rank)
+    u = np.fliplr(u)
+    s = np.flipud(s)
+    vt = np.flipud(vt)
     sigma_sqrt = np.diag(np.sqrt(s))
     x = np.dot(u, sigma_sqrt).T
     y = np.dot(np.dot(sigma_sqrt, vt), np.diag(std))
