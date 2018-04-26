@@ -40,7 +40,7 @@ def solve(t_predicted, t_max, Y, scalarization='D'):
     n = len(t_predicted)
     v0 = np.full((n, ), 0.5)
     constraints = {'type': 'ineq', 'fun': constraint}
-    v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, constraints=constraints)
+    v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, options={'maxiter': 1000}, constraints=constraints)
     return v_opt.x
 
 
