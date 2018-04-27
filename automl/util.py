@@ -11,6 +11,7 @@ import pandas as pd
 import pkg_resources
 import re
 import sys
+import glob
 from math import isclose
 from sklearn.metrics import mean_squared_error
 
@@ -274,8 +275,11 @@ def merge_rows(save_dir):
     # openml_datasets = pd.DataFrame.from_dict(openml_datasets, orient='index')
     # dataset_sizes = openml_datasets[['NumberOfInstances', 'NumberOfFeatures']]
 
+    #find the log file
+    for f in glob.glob('{}/log*.txt'.format(save_dir)):
+         log_path = f
     # save dataset sizes
-    with open(os.path.join(save_dir, 'log.txt'), 'r') as file:
+    with open(log_path, 'r') as file:
         lines = file.readlines()
     dataset_ids, sizes = [], []
     for line in lines:
