@@ -45,11 +45,11 @@ def main(args):
     # load training dataset
     dataset = pd.read_csv(args.data, header=None).values
     filename = args.data.split('/')[-1].split('.')[0]
-    # if filename contains number, record number as ID; else record filename
-    try:
-        dataset_id = int(re.findall("\\d+", filename)[0])
-    except IndexError:
-        dataset_id = filename
+    # whether to use dataset filename as error matrix vector filename 
+    if args.fullname:
+        dataset_id = filename        
+    else:
+        dataset_id = int(re.findall("\\d+", filename)[0])        
 
     # do not generate error matrices twice on one dataset
     if args.error_matrix.endswith('.csv'):
@@ -106,6 +106,8 @@ def parse_args(argv):
     parser.add_argument('--error_matrix', type=str, default=None,
                         help='Existing error matrix. Avoid re-generate its rows.')
     parser.add_argument('--auc', type=lambda x: x == 'True', default=False, help='Whether to use AUC instead of BER')
+    parser.add_argument('--fullname', type=lambda x: x == 'True', default=False,
+                        help='Whether to use the full name of dataset as corresponding error matrix vectors.')
     return parser.parse_args(argv)
 
 

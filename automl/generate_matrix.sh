@@ -58,6 +58,12 @@ then
   "$8" = "False"
 fi
 
+# default to not using fullname
+if [ "$9" == "" ]
+then
+  "$9" = "False"
+fi
+
 # strip '/' from end of file path (if there is one)
 SAVE_DIR=${3%/}
 DATA_DIR=${4%/}
@@ -65,7 +71,8 @@ P_TYPE=$5
 JSON_FILE=$6
 MAX_PROCS=$7
 AUC=$8
-ERROR_MATRIX=$9
+FULLNAME=$9
+ERROR_MATRIX=$10
 
 
 # location of this script
@@ -81,7 +88,7 @@ then
 
   ls ${DATA_DIR}/*.csv | xargs -i --max-procs=${MAX_PROCS} bash -c \
   "python ${DIR}/generate_vector.py '${P_TYPE}' {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${time} \
-  --error_matrix=${ERROR_MATRIX} --auc=${AUC}"
+  --error_matrix=${ERROR_MATRIX} --auc=${AUC} --fullname=${FULLNAME}"
 fi
 
 # merge mode
