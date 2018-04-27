@@ -76,7 +76,10 @@ def main(args):
                 line = '\nID={}, model={}, {}'.format(dataset_id, setting, e)
                 log.write(line)
         results[:, i] = np.array([cv_errors.mean(), time.time() - start])
-        save_path = os.path.join(args.save_dir, str(dataset_id).zfill(5) + '.csv')
+        if args.fullname:
+            save_path = os.path.join(args.save_dir, str(dataset_id) + '.csv')
+        else:
+            save_path = os.path.join(args.save_dir, str(dataset_id).zfill(5) + '.csv')
         pd.DataFrame(results, columns=headings, index=['Error', 'Time']).to_csv(save_path)
 
     # log results
