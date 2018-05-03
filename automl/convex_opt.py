@@ -34,8 +34,6 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='cvxpy'):
     n = len(t_predicted)
 
     if solver == 'cvxpy':
-        command = 'export OMP_NUM_THREADS={}'.format(n_cores)
-        output = subprocess.check_output(['bash', '-c', command])    # thread control for cvxpy
         v = Variable(n)
         objective = Minimize(-log_det(sum([v[i]*np.outer(Y[:, i], Y[:, i]) for i in range(n)])))
         constraints = [0 <= v, v <= 1]
