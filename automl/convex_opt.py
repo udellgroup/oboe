@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import pickle
 import openml
+import subprocess
 from cvxpy import *
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
@@ -19,7 +20,7 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='cvxpy'):
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
 
-    Args:   
+    Args:
          t_predicted (np.ndarray): 1-d array specifying predicted runtime for each model setting
          t_max (float):            maximum runtime of sampled model
          n_cores (int):            number of cores to use
@@ -33,7 +34,8 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='cvxpy'):
     n = len(t_predicted)
 
     if solver == 'cvxpy':
-        os.environ['OMP_NUM_THREADS'] = str(n_cores)    # thread control for cvxpy
+        command = 'export OMP_NUM_THREADS={}'.format(n_cores)
+        output = subprocess.check_output(['bash', '-c', command])    # thread control for cvxpy
         v = Variable(n)
         objective = Minimize(-log_det(sum([v[i]*np.outer(Y[:, i], Y[:, i]) for i in range(n)])))
         constraints = [0 <= v, v <= 1]
