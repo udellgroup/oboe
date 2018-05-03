@@ -19,9 +19,10 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='cvxpy'):
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
 
-    Args:
+    Args:   
          t_predicted (np.ndarray): 1-d array specifying predicted runtime for each model setting
          t_max (float):            maximum runtime of sampled model
+         n_cores (int):            number of cores to use
          Y (np.ndarray):           matrix representing latent variable weights of error matrix
          scalarization (str):      scalarization method in experimental design.
          solver (str):             solver to use. either 'cvxpy' or 'scipy'
@@ -32,12 +33,13 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='cvxpy'):
     n = len(t_predicted)
 
     if solver == 'cvxpy':
+        os.environ['OMP_NUM_THREADS'] = str(n_cores)    # thread control for cvxpy
         v = Variable(n)
         objective = Minimize(-log_det(sum([v[i]*np.outer(Y[:, i], Y[:, i]) for i in range(n)])))
         constraints = [0 <= v, v <= 1]
         constraints += [t_predicted * v <= t_max * n_cores]
         prob = Problem(objective, constraints)
-        result = prob.solve(mosek_params={'mosek.iparam.num_threads': n_cores})
+        result = prob.solve()
         v_sol = np.array(v.value).T[0]
         return v_sol
 
