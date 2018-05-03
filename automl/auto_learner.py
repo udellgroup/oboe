@@ -121,7 +121,7 @@ class AutoLearner:
             # select algorithms to sample only from subset of algorithms that will run in allocated time
             valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
             Y = self.Y[:rank, valid]
-            v_opt = convex_opt.solve(t_predicted[valid], self.n_cores * runtime_limit/2, Y, self.scalarization)
+            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/2, self.n_cores, Y, self.scalarization)
             to_sample = valid[np.where(v_opt > 0.9)[0]]
         else:
             to_sample = np.arange(0, self.new_row.shape[1])
