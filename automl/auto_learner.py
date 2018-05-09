@@ -217,10 +217,15 @@ class AutoLearner:
         t_predicted = convex_opt.predict_runtime(x_train.shape)
 
         # split data into training and validation sets
-        x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
+        try:
+            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
+        except ValueError:
+            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
 
         ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
-        times = [2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))]
+        t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
+        t_init = max(1, t_init)
+        times = [t_init]
         losses = [1.0]
 
         e_hat, actual_times, sampled, ensembles = [], [], [], []
