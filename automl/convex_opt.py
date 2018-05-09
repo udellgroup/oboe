@@ -15,7 +15,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 
 
-def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='cvxpy'):
+def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
     """Solve the following optimization problem:
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
