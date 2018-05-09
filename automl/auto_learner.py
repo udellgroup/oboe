@@ -165,8 +165,9 @@ class AutoLearner:
         # k-fold fit candidate learners of ensemble
         remaining = (runtime_limit - (time.time()-start)) * self.n_cores
         # add best sampled model to list of candidate learners to avoid empty lists
-        best_sampled_idx = int(np.argmin(self.new_row[:, to_sample]))
-        candidate_indices = [to_sample[best_sampled_idx]]
+        best_sampled_idx = to_sample[int(np.argmin(self.new_row[:, to_sample]))]
+        assert self.sampled_models[best_sampled_idx] is not None
+        candidate_indices = [best_sampled_idx]
         self.ensemble.candidate_learners.append(self.sampled_models[best_sampled_idx])
         for i in np.argsort(self.new_row[0]):
             if t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining:
