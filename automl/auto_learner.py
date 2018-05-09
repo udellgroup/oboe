@@ -121,8 +121,11 @@ class AutoLearner:
             # select algorithms to sample only from subset of algorithms that will run in allocated time
             valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
             Y = self.Y[:rank, valid]
+            # TODO: check if Y is rank-deficient, i.e. will ED problem fail?
             v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/2, self.n_cores, Y, self.scalarization)
             to_sample = valid[np.where(v_opt > 0.9)[0]]
+            if np.isnan(to_sample).any():
+                to_sample = np.argsort(t_predicted)[:rank]
         else:
             to_sample = np.arange(0, self.new_row.shape[1])
 
@@ -161,10 +164,16 @@ class AutoLearner:
 
         # k-fold fit candidate learners of ensemble
         remaining = (runtime_limit - (time.time()-start)) * self.n_cores
-        candidate_indices = []
+        # add best sampled model to list of candidate learners to avoid empty lists
+        best_sampled_idx = int(np.argmin(self.new_row[:, to_sample]))
+        candidate_indices = [to_sample[best_sampled_idx]]
+        self.ensemble.candidate_learners.append(self.sampled_models[best_sampled_idx])
         for i in np.argsort(self.new_row[0]):
             if t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining:
+                last = candidate_indices.pop()
+                assert last == best_sampled_idx
                 candidate_indices.append(i)
+                candidate_indices.append(last)
                 # if model has already been k-fold fitted, immediately add to candidate learners
                 if i in self.sampled_indices:
                     assert self.sampled_models[i] is not None
