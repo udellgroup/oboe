@@ -88,7 +88,7 @@ then
 
   ls ${DATA_DIR}/*.csv | xargs -i --max-procs=${MAX_PROCS} bash -c \
   "python ${DIR}/generate_vector.py '${P_TYPE}' {} --file=${JSON_FILE} --save_dir=${SAVE_DIR}/${time} \
-  --error_matrix=${ERROR_MATRIX} --auc=${AUC} --fullname=${FULLNAME}"
+  --error_matrix=${ERROR_MATRIX} --auc=${AUC} --fullname=${FULLNAME} &>> ${SAVE_DIR}/${time}/warnings_and_errors.txt"
 fi
 
 # merge mode
