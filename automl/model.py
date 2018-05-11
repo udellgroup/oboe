@@ -150,7 +150,10 @@ class Ensemble(Model):
             n_initial = 3
             for i in np.argsort(cv_errors)[:n_initial]:
                 x_tr += (self.candidate_learners[i].cv_predictions.reshape(-1, 1), )
-                pre_fitted = fitted_base_learners[self.candidate_learners[i].index]
+                if fitted_base_learners is None:
+                    pre_fitted = None
+                else:
+                    pre_fitted = fitted_base_learners[self.candidate_learners[i].index]
                 if pre_fitted is not None:
                     self.base_learners.append(pre_fitted)
                 else:
