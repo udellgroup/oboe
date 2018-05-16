@@ -73,7 +73,7 @@ class Model:
         """
         return self.model.predict(x_test)
 
-    def kfold_fit_validate(self, x_train, y_train, n_folds):
+    def kfold_fit_validate(self, x_train, y_train, n_folds, random_state=None):
         """Performs k-fold cross validation on a training dataset. Note that this is the function used to fill entries
         of the error matrix.
 
@@ -88,7 +88,7 @@ class Model:
         """
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
-        kf = StratifiedKFold(n_folds, shuffle=True)
+        kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)
 
         for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
             x_tr = x_train[train_idx, :]
@@ -112,9 +112,8 @@ class Model:
 
         return cv_errors, y_predicted
 
-    def kfold_fit_validate_testing(self, x_train, y_train, n_folds):
-        """Performs k-fold cross validation on a training dataset. Note that this is the function used to fill entries
-        of the error matrix.
+    def kfold_fit_validate_testing(self, x_train, y_train, n_folds, random_state=None):
+        """Performs k-fold cross validation on a training dataset, with fitting on a portion of the training fold and testing on the test fold. 
         
         Args:
         x_train (np.ndarray): Features of the training dataset.
@@ -127,7 +126,7 @@ class Model:
         """
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
-        kf = StratifiedKFold(n_folds, shuffle=True, random_state=0)
+        kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)
             
         for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
             x_tr_val = x_train[train_idx, :]
@@ -136,9 +135,9 @@ class Model:
             y_te = y_train[test_idx]
             # split data into training and validation sets
             try:
-                x_tr, x_va, y_tr, y_va = train_test_split(x_tr_val, y_tr_val, test_size=0.15, stratify=y_tr_val, random_state=0)
+                x_tr, x_va, y_tr, y_va = train_test_split(x_tr_val, y_tr_val, test_size=0.15, stratify=y_tr_val, random_state=random_state)
             except ValueError:
-                x_tr, x_va, y_tr, y_va = train_test_split(x_tr_val, y_tr_val, test_size=0.15, random_state=0)
+                x_tr, x_va, y_tr, y_va = train_test_split(x_tr_val, y_tr_val, test_size=0.15, random_state=random_state)
                 
             model = self.instantiate()
             if len(np.unique(y_tr)) > 1:

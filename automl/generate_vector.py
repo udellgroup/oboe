@@ -29,8 +29,9 @@ import time
 import util
 from model import Model
 import mkl
-mkl.set_num_threads(1)
 
+mkl.set_num_threads(1)
+RANDOM_STATE = 0
 
 def main(args):
     # load selected algorithms & hyperparameters from string or JSON file
@@ -70,7 +71,7 @@ def main(args):
         model = Model(args.p_type, setting['algorithm'], setting['hyperparameters'], args.auc, args.verbose)
         start = time.time()
         try:
-            cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds)
+            cv_errors, _ = model.kfold_fit_validate(x, y, n_folds=args.n_folds, random_state=RANDOM_STATE)
         except (ZeroDivisionError, KeyError, TypeError, ValueError) as e:
             with open(os.path.join(args.save_dir, log_file), 'a') as log:
                 line = '\nID={}, model={}, {}'.format(dataset_id, setting, e)
@@ -103,7 +104,7 @@ def parse_args(argv):
                              'See automl/defaults/models.json for example.')
     parser.add_argument('--save_dir', type=str, default='./custom',
                         help='Directory in which to save new error matrix.')
-    parser.add_argument('--n_folds', type=int, default=10, help='Number of folds to use for k-fold cross validation.')
+    parser.add_argument('--n_folds', type=int, default=5, help='Number of folds to use for k-fold cross validation.')
     parser.add_argument('--verbose', type=lambda x: x == 'True', default=False,
                         help='Whether to generate print statements on completion.')
     parser.add_argument('--error_matrix', type=str, default=None,
