@@ -102,7 +102,7 @@ class Model:
                 y_predicted[test_idx] = model.predict(x_te)
             else:
                 y_predicted[test_idx] = y_tr[0]
-            cv_errors[i] = self.error(y_predicted[test_idx], y_te)
+            cv_errors[i] = self.error(y_te, y_predicted[test_idx])
 
         self.cv_error = cv_errors.mean()
         self.cv_predictions = y_predicted
@@ -146,7 +146,7 @@ class Model:
                 y_predicted[test_idx] = model.predict(x_te)
             else:
                 y_predicted[test_idx] = y_tr[0]
-            cv_errors[i] = self.error(y_predicted[test_idx], y_te)
+            cv_errors[i] = self.error(y_te, y_predicted[test_idx])
                 
         self.cv_error = cv_errors.mean()
         self.cv_predictions = y_predicted
