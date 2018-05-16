@@ -5,7 +5,7 @@ Parent class for all ML models.
 import numpy as np
 import util
 from scipy.stats import mode
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 
 RANDOM_STATE = 0
@@ -112,8 +112,8 @@ class Model:
 
         return cv_errors, y_predicted
 
-def kfold_fit_validate_testing(self, x_train, y_train, n_folds):
-    """Performs k-fold cross validation on a training dataset. Note that this is the function used to fill entries
+    def kfold_fit_validate_testing(self, x_train, y_train, n_folds):
+        """Performs k-fold cross validation on a training dataset. Note that this is the function used to fill entries
         of the error matrix.
         
         Args:
