@@ -122,7 +122,7 @@ class AutoLearner:
             valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
             Y = self.Y[:rank, valid]
             # TODO: check if Y is rank-deficient, i.e. will ED problem fail?
-            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/2, self.n_cores, Y, self.scalarization)
+            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization)
             to_sample = valid[np.where(v_opt > 0.9)[0]]
             if np.isnan(to_sample).any():
                 to_sample = np.argsort(t_predicted)[:rank]
@@ -156,11 +156,11 @@ class AutoLearner:
             self.new_row[:, to_sample[i]] = cv_error.mean()
             self.sampled_models[to_sample[i]] = sample_models[i]
         imputed = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
-        # self.new_row = imputed
 
-        # impute ONLY unknown entries ??
-        unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
-        self.new_row[:, unknown] = imputed[:, unknown]
+        # impute ALL entries
+        # unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
+        # self.new_row[:, unknown] = imputed[:, unknown]
+        self.new_row = imputed
 
         # k-fold fit candidate learners of ensemble
         remaining = (runtime_limit - (time.time()-start)) * self.n_cores
