@@ -5,7 +5,7 @@ Parent class for all ML models.
 import numpy as np
 import util
 from scipy.stats import mode
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 
 RANDOM_STATE = 0
@@ -112,6 +112,51 @@ class Model:
 
         return cv_errors, y_predicted
 
+    def kfold_fit_validate_testing(self, x_train, y_train, n_folds):
+        """Performs k-fold cross validation on a training dataset. Note that this is the function used to fill entries
+        of the error matrix.
+        
+        Args:
+        x_train (np.ndarray): Features of the training dataset.
+        y_train (np.ndarray): Labels of the training dataset.
+        n_folds (int):        Number of folds to use for cross validation.
+        
+        Returns:
+        float: Mean of k-fold cross validation error.
+        np.ndarray: Predictions on the training dataset from cross validation.
+        """
+        y_predicted = np.empty(y_train.shape)
+        cv_errors = np.empty(n_folds)
+        kf = StratifiedKFold(n_folds, shuffle=True, random_state=0)
+            
+        for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
+            x_tr_val = x_train[train_idx, :]
+            y_tr_val = y_train[train_idx]
+            x_te = x_train[test_idx, :]
+            y_te = y_train[test_idx]
+            # split data into training and validation sets
+            try:
+                x_tr, x_va, y_tr, y_va = train_test_split(x_tr_val, y_tr_val, test_size=0.15, stratify=y_tr_val, random_state=0)
+            except ValueError:
+                x_tr, x_va, y_tr, y_va = train_test_split(x_tr_val, y_tr_val, test_size=0.15, random_state=0)
+                
+            model = self.instantiate()
+            if len(np.unique(y_tr)) > 1:
+                model.fit(x_tr, y_tr)
+                y_predicted[test_idx] = model.predict(x_te)
+            else:
+                y_predicted[test_idx] = y_tr[0]
+            cv_errors[i] = self.error(y_predicted[test_idx], y_te)
+                
+        self.cv_error = cv_errors.mean()
+        self.cv_predictions = y_predicted
+        self.sampled = True
+        if self.verbose:
+            print("{} {} complete.".format(self.algorithm, self.hyperparameters))
+
+        return cv_errors, y_predicted
+
+
     def error(self, y_true, y_predicted):
         """Compute error metric for the model.
 
@@ -150,7 +195,10 @@ class Ensemble(Model):
             n_initial = 3
             for i in np.argsort(cv_errors)[:n_initial]:
                 x_tr += (self.candidate_learners[i].cv_predictions.reshape(-1, 1), )
-                pre_fitted = fitted_base_learners[self.candidate_learners[i].index]
+                if fitted_base_learners is None:
+                    pre_fitted = None
+                else:
+                    pre_fitted = fitted_base_learners[self.candidate_learners[i].index]
                 if pre_fitted is not None:
                     self.base_learners.append(pre_fitted)
                 else:
