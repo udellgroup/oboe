@@ -1,3 +1,5 @@
+#requires a log file in the folder that contains csv files.
+
 """
 Miscellaneous helper functions.
 """
@@ -266,7 +268,12 @@ def merge_rows(save_dir):
             error_matrix_rows += (np.expand_dims(dataframe.values[0, permutation], 0), )
             runtime_matrix_rows += (np.expand_dims(dataframe.values[1, permutation], 0), )
             ids.append(file.split('.')[0])
-            os.remove(file_path)
+            try:
+                os.mkdir(os.path.join(save_dir, "merged_csv_files"))
+            except:
+                pass
+            os.rename(file_path, os.path.join(save_dir, "merged_csv_files", file))
+#             os.remove(file_path)
             if len(error_matrix_rows) % 50 == 0:
                 print('Merging {} files...'.format(len(error_matrix_rows)))
 
