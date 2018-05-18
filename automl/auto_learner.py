@@ -121,6 +121,8 @@ class AutoLearner:
             options = np.where(t_predicted <= runtime_limit/2 - (time.time() - t0))[0]
             # remove algorithms that have been sampled already
             options = list(set(options) - self.sampled_indices)
+            if len(options) == 0:
+                break
             to_sample = np.random.choice(options)
             self.sampled_indices.add(to_sample)
             self.sampled_models[to_sample] = Model(self.p_type, self.column_headings[to_sample]['algorithm'],
