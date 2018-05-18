@@ -122,8 +122,12 @@ class AutoLearner:
             # remove algorithms that have been sampled already
             options = list(set(options) - self.sampled_indices)
             if len(options) == 0:
-                break
-            to_sample = np.random.choice(options)
+                if len(self.ensemble.candidate_learners) == 0:
+                    to_sample = np.argmin(t_predicted)    
+                else:
+                    break
+            else:
+                to_sample = np.random.choice(options)
             self.sampled_indices.add(to_sample)
             self.sampled_models[to_sample] = Model(self.p_type, self.column_headings[to_sample]['algorithm'],
                                                    self.column_headings[to_sample]['hyperparameters'], self.verbose,
