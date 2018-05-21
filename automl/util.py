@@ -282,25 +282,25 @@ def merge_rows(save_dir):
     # openml_datasets = pd.DataFrame.from_dict(openml_datasets, orient='index')
     # dataset_sizes = openml_datasets[['NumberOfInstances', 'NumberOfFeatures']]
 
-    #find the log file
-    for f in glob.glob('{}/log*.txt'.format(save_dir)):
-         log_path = f
-    # save dataset sizes
-    with open(log_path, 'r') as file:
-        lines = file.readlines()
-    dataset_ids, sizes = [], []
-    for line in lines:
-        if 'Size' in line:
-            log_ids = [int(n) for n in re.findall(r'ID=(\d+)', line)]
-            size = [eval(n) for n in re.findall(r'Size=\((\d+, \d+)\)', line)]
-            if len(log_ids) == 1 and len(size) == 1:
-                dataset_ids.append(log_ids[0])
-                sizes.append(size[0])
+#     #find the log file
+#     for f in glob.glob('{}/log*.txt'.format(save_dir)):
+#          log_path = f
+#     # save dataset sizes
+#     with open(log_path, 'r') as file:
+#         lines = file.readlines()
+#     dataset_ids, sizes = [], []
+#     for line in lines:
+#         if 'Size' in line:
+#             log_ids = [int(n) for n in re.findall(r'ID=(\d+)', line)]
+#             size = [eval(n) for n in re.findall(r'Size=\((\d+, \d+)\)', line)]
+#             if len(log_ids) == 1 and len(size) == 1:
+#                 dataset_ids.append(log_ids[0])
+#                 sizes.append(size[0])
 
     # save results
     pd.DataFrame(np.vstack(error_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, em))
     pd.DataFrame(np.vstack(runtime_matrix_rows), index=ids, columns=headers).to_csv(os.path.join(save_dir, rm))
-    pd.DataFrame(np.vstack(sizes), index=dataset_ids).to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))    
+#     pd.DataFrame(np.vstack(sizes), index=dataset_ids).to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))    
     # dataset_sizes.to_csv(os.path.join(save_dir, 'dataset_sizes.csv'))
 
     
