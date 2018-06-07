@@ -14,6 +14,8 @@ import time
 import util
 from model import Model, Ensemble
 from sklearn.model_selection import train_test_split
+import signal
+from contextlib import contextmanager
 
 DEFAULTS = pkg_resources.resource_filename(__name__, 'defaults')
 ERROR_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0)
@@ -114,6 +116,7 @@ class AutoLearner:
         if self.verbose:
             print('Fitting AutoLearner with max. runtime {}s'.format(runtime_limit))
         t_predicted = convex_opt.predict_runtime(x_train.shape, runtime_matrix=self.runtime_matrix)
+        
 
         if self.selection_method == 'qr':
             to_sample = linalg.pivot_columns(self.error_matrix)
@@ -131,8 +134,10 @@ class AutoLearner:
 
         if len(to_sample) == 0 and len(self.sampled_indices) == 0:
             # if no columns are selected in first iteration (log det instability), sample n fastest columns
-            n = len(np.where(np.cumsum(np.sort(t_predicted)) <= runtime_limit)[0])
+            n = len(np.where(np.cumsum(np.sort(t_predicted)) <= runtime_limit/4)[0])
             to_sample = np.argsort(t_predicted)[:n]
+            
+        
 
         # only need to compute column entry if it has not been computed already
         to_sample = list(set(to_sample) - self.sampled_indices)
@@ -211,7 +216,7 @@ class AutoLearner:
 
         if self.verbose:
             print('\nAutoLearner fitting complete.')
-
+            
     def fit_doubling(self, x_train, y_train, verbose=False):
         """Fit an AutoLearner object, iteratively doubling allowed runtime."""
         t_predicted = convex_opt.predict_runtime(x_train.shape)
@@ -226,13 +231,13 @@ class AutoLearner:
         t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
         t_init = max(1, t_init)
         times = [t_init]
-        losses = [1.0]
+        losses = [0.5]
 
         e_hat, actual_times, sampled, ensembles = [], [], [], []
         k, t = ranks[0], times[0]
 
         start = time.time()
-        counter, best = 0, 0
+        counter, self.best = 0, 0
         while time.time() - start < self.runtime_limit - t:
             if verbose:
                 print('Fitting with k={}, t={}'.format(k, t))
@@ -250,18 +255,94 @@ class AutoLearner:
 
             if loss == min(losses):
                 ranks.append(k+1)
-                best = counter
+                self.best = counter
             else:
                 ranks.append(k)
-
+         
             times.append(2*t)
             k = ranks[-1]
             t = times[-1]
             counter += 1
 
         # after all iterations, restore best model
-        self.new_row = e_hat[best]
-        self.ensemble = ensembles[best]
+        self.new_row = e_hat[self.best]
+        self.ensemble = ensembles[self.best]
+        return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
+                'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
+                'models': ensembles}
+            
+    def fit_doubling_time_constrained(self, x_train, y_train, verbose=False):        
+        """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time constraint."""
+        t_predicted = convex_opt.predict_runtime(x_train.shape)
+
+        # split data into training and validation sets
+        try:
+            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
+        except ValueError:
+            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
+
+        ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
+        t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
+        t_init = max(1, t_init)
+        times = [t_init]
+        losses = [0.5]
+
+        e_hat, actual_times, sampled, ensembles = [], [], [], []        
+
+        start = time.time()
+        
+        def doubling():
+            k, t = ranks[0], times[0]
+            counter, self.best = 0, 0            
+            while time.time() - start < self.runtime_limit - t:
+                if verbose:
+                    print('Fitting with k={}, t={}'.format(k, t))
+                t0 = time.time()
+                self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
+                self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
+                loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+
+                # TEMPORARY: Record intermediate results
+                e_hat.append(np.copy(self.new_row))
+                actual_times.append(time.time() - start)
+                sampled.append(self.sampled_indices)
+                ensembles.append(self.ensemble)
+                losses.append(loss)
+
+                if loss == min(losses):
+                    ranks.append(k+1)
+                    self.best = counter
+                else:
+                    ranks.append(k)
+
+                times.append(2*t)
+                k = ranks[-1]
+                t = times[-1]
+                counter += 1
+                
+        class TimeoutException(Exception): pass
+
+        @contextmanager
+        def time_limit(seconds):
+            def signal_handler(signum, frame):
+                raise TimeoutException("Time limit reached.")
+            signal.signal(signal.SIGALRM, signal_handler)
+            signal.alarm(seconds)
+            try:
+                yield
+            finally:
+                signal.alarm(0)
+
+        try:
+            with time_limit(self.runtime_limit):
+                doubling()
+        except TimeoutException as e:
+            if verbose:
+                print("Time limit reached.")
+
+        # after all iterations, restore best model
+        self.new_row = e_hat[self.best]
+        self.ensemble = ensembles[self.best]
         return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
                 'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
                 'models': ensembles}

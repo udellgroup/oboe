@@ -53,9 +53,10 @@ def main(args):
         dataset_id = int(re.findall("\\d+", filename)[0])        
 
     # do not generate error matrices twice on one dataset
-    if args.error_matrix.endswith('.csv'):
-        generated_datasets = pd.read_csv(args.error_matrix, index_col=0).index.tolist()
-        assert dataset_id not in generated_datasets, 'Already generated.'
+    if args.error_matrix != None:
+        if args.error_matrix.endswith('.csv'):
+            generated_datasets = pd.read_csv(args.error_matrix, index_col=0).index.tolist()
+            assert dataset_id not in generated_datasets, 'Already generated.'
 
     t0 = time.time()
     x = dataset[:, :-1]

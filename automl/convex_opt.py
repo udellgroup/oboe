@@ -57,7 +57,7 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
 
         v0 = np.full((n, ), 0.5)
         constraints = {'type': 'ineq', 'fun': constraint}
-        v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, options={'maxiter': 1000},
+        v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, options={'maxiter': 50},
                          constraints=constraints)
         return v_opt.x
 
