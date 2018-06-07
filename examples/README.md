@@ -1,2 +1,2 @@
-# lowrank-automl
-Sample usage of our automated machine learning framework.
+# examples
+Example usage of the Oboe system.
