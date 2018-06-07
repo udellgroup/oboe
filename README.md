@@ -1,4 +1,4 @@
-# lowrank-automl
+# Oboe
 
 In an orchestra, the oboe plays an initial note which the other instruments use to tune to the right frequency before the performance begins; this package, Oboe, can be used to provide an initialization with which to tune the hyperparameters of machine learning algorithms.
 
