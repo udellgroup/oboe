@@ -52,6 +52,10 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
             def objective(v):
                 return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
 
+        elif scalarization == 'E':
+            def objective(v):
+                return np.linalg.norm(np.linalg.pinv(Y @ np.diag(v) @ Y.T), ord=2)
+
         def constraint(v):
             return t_max * n_cores- t_predicted @ v
 
