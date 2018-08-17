@@ -3,7 +3,7 @@
 In an orchestra, the oboe plays an initial note which the other instruments use to tune to the right frequency before the performance begins; this package, Oboe, can be used to provide an initialization with which to tune the hyperparameters of machine learning algorithms.
 
 Oboe is a data-driven Python algorithmic system for automated machine
-learning, and is based on matrix factorization and classical experiment design.
+learning, and is based on matrix factorization and classical experiment design. For a complete description, refer to [our paper](https://arxiv.org/abs/1808.03233).
 
 This system is still under developement and subjects to change.
 
