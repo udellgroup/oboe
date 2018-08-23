@@ -12,15 +12,34 @@ This system is still under developement and subjects to change.
 #### Dependencies
 oboe requires:
 * Python (>= 3.5)
-* NumPy  (>= 1.8.2)
-* SciPy  (>= 0.13.3)
-* Scikit-Learn  (>= 0.18)
+* numpy  (>= 1.8.2)
+* scipy  (>= 0.13.3)
+* pandas (>=0.22.0)
+* scikit-learn  (>= 0.18)
 * multiprocessing
+* OpenML (>=0.7.0)
+* mkl (>=1.0.0)
+* re
+* os
+* json
+* util
+
+`cvxpy` is required unless `scipy.optimize` is used as convex
 
 #### User Installation
-This part is currently under developement; an example for code usage is in the `example` folder.
+This part is currently under development; an example for code usage is in the `example` folder. The package will be `setup.py` installable in the future.
 
 ## Usage
+
+### Online Phase (AutoML initialization)
+Given a new dataset, we want to select promising models and hyperparameters. Denote features and labels of the training set as `x_train` and `y_train`, and features of the test set as `x_test`, a short example of training and testing is
+```
+from auto_learner import AutoLearner
+m = AutoLearner()
+m.fit(x_train, y_train)
+m.predict(x_test)
+```
+Additional parameters can be applied to customize `AutoLearner`. For executable and more detailed examples, please refer to the `example` folder.
 
 ### Offline Phase
 
@@ -38,6 +57,5 @@ Then to get the error matrix in use,
 will concatenate the rows of error and runtime matrices, respectively, into `error_matrix.csv` and `runtime_matrix.csv`.
 
 
-### Online Phase
-Please refer to the example in the `example` folder.
+
 

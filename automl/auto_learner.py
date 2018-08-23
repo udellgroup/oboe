@@ -52,7 +52,7 @@ class AutoLearner:
     """
 
     def __init__(self,
-                 p_type, algorithms=None, hyperparameters=None, verbose=False,
+                 p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=mp.cpu_count(), runtime_limit=512,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None,
@@ -99,7 +99,7 @@ class AutoLearner:
         self.stacking_hyperparams = stacking_hyperparams
         self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
 
-    def fit(self, x_train, y_train, rank=None, runtime_limit=None):
+    def _fit(self, x_train, y_train, rank=None, runtime_limit=None):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
         new dataset, predict performance on the rest, then construct an optimal ensemble model.
 
@@ -243,7 +243,7 @@ class AutoLearner:
                 print('Fitting with k={}, t={}'.format(k, t))
             t0 = time.time()
             self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
-            self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
+            self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
             loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 
             # TEMPORARY: Record intermediate results
@@ -271,8 +271,8 @@ class AutoLearner:
                 'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
                 'models': ensembles}
             
-    def fit_doubling_time_constrained(self, x_train, y_train, verbose=False):        
-        """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time constraint."""
+    def fit(self, x_train, y_train, verbose=False):
+        """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
         t_predicted = convex_opt.predict_runtime(x_train.shape)
 
         # split data into training and validation sets
@@ -299,7 +299,7 @@ class AutoLearner:
                     print('Fitting with k={}, t={}'.format(k, t))
                 t0 = time.time()
                 self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
-                self.fit(x_tr, y_tr, rank=k, runtime_limit=t)
+                self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
                 loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 
                 # TEMPORARY: Record intermediate results
