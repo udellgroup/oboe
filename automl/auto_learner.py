@@ -56,7 +56,7 @@ class AutoLearner:
                  n_cores=mp.cpu_count(), runtime_limit=512,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None,
-                 stacking_alg='greedy', **stacking_hyperparams):
+                 stacking_alg='greedy', solver='scipy', **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
         assert selection_method in {'qr', 'min_variance'}, "The method to select entries to sample must be " \
@@ -98,6 +98,9 @@ class AutoLearner:
         self.stacking_alg = stacking_alg
         self.stacking_hyperparams = stacking_hyperparams
         self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
+        
+        # convex solver
+        self.solver = solver
 
     def _fit(self, x_train, y_train, rank=None, runtime_limit=None):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
@@ -125,7 +128,7 @@ class AutoLearner:
             valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
             Y = self.Y[:rank, valid]
             # TODO: check if Y is rank-deficient, i.e. will ED problem fail?
-            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization)
+            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization, self.solver)
             to_sample = valid[np.where(v_opt > 0.9)[0]]
             if np.isnan(to_sample).any():
                 to_sample = np.argsort(t_predicted)[:rank]
