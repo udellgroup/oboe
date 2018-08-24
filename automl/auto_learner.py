@@ -28,35 +28,31 @@ class AutoLearner:
     Attributes:
         p_type (str):                  Problem type. One of {'classification', 'regression'}.
         algorithms (list):             A list of algorithm types to be considered, in strings. (e.g. ['KNN', 'lSVM']).
-        hyperparameters (dict):        A nested dict of hyperparameters to be considered; see above for example.
-        verbose (bool):                Whether or not to generate print statements when a model finishes fitting.
-
+        hyperparameters (dict):        A nested dict of hyperparameters to be considered.
+        verbose (bool):                Whether or not to generate print statements that showcase the progress.
         n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
-        runtime_limit(int):            Maximum training time for AutoLearner (powers of 2 preferred).
-
+        runtime_limit(int):            Maximum training time for AutoLearner, in seconds.
         selection_method (str):        Method of selecting entries of new row to sample.
-        scalarization (str):           Scalarization of objective for min-variance selection. Either 'D' or 'A'.
-
+        scalarization (str):           Scalarization of the covariance matrix for mininum variance selection. One of {'D', 'A', 'E'}.
         error_matrix (DataFrame):      Error matrix to use for imputation; includes index and headers.
         runtime_matrix (DataFrame):    Runtime matrix to use for runtime prediction; includes index and headers.
-        column_headings (list):        Column headings of error/runtime matrices; list of dicts.
-        X, Y (np.ndarray):             PCA decomposition of error matrix.
-
         new_row (np.ndarray):          Predicted row of error matrix.
+        ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking'}.
+        
+    Attributes to be added in the future:
+        X, Y (np.ndarray):             PCA decomposition of error matrix.
         sampled_indices (set):         Indices of new row that have been sampled.
         sampled_models (list):         List of models that have been sampled (i.e. k-fold fitted).
         fitted_indices (set):          Indices of new row that have been fitted (i.e. included in ensemble)
         fitted_models (list):          List of models that have been fitted.
-
-        stacking_alg (str):            Algorithm type to use for stacked learner.
     """
 
     def __init__(self,
                  p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=mp.cpu_count(), runtime_limit=512,
                  selection_method='min_variance', scalarization='D',
-                 error_matrix=None, runtime_matrix=None,
-                 stacking_alg='greedy', **stacking_hyperparams):
+                 error_matrix=None, runtime_matrix=None, new_row=None,
+                 ensemble_method='greedy', **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
         assert selection_method in {'qr', 'min_variance'}, "The method to select entries to sample must be " \
@@ -88,16 +84,16 @@ class AutoLearner:
         self.X, self.Y, _ = linalg.pca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
 
         # sampled & fitted models
-        self.new_row = np.zeros((1, self.error_matrix.shape[1]))
+        self.new_row = new_row or np.zeros((1, self.error_matrix.shape[1]))
         self.sampled_indices = set()
         self.sampled_models = [None] * self.error_matrix.shape[1]
         self.fitted_indices = set()
         self.fitted_models = [None] * self.error_matrix.shape[1]
 
         # ensemble attributes
-        self.stacking_alg = stacking_alg
+        self.ensemble_method = ensemble_method
         self.stacking_hyperparams = stacking_hyperparams
-        self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
+        self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
 
     def _fit(self, x_train, y_train, rank=None, runtime_limit=None):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
@@ -242,7 +238,7 @@ class AutoLearner:
             if verbose:
                 print('Fitting with k={}, t={}'.format(k, t))
             t0 = time.time()
-            self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
+            self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
             self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
             loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 
@@ -298,7 +294,7 @@ class AutoLearner:
                 if verbose:
                     print('Fitting with k={}, t={}'.format(k, t))
                 t0 = time.time()
-                self.ensemble = Ensemble(self.p_type, self.stacking_alg, self.stacking_hyperparams)
+                self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
                 self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
                 loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 

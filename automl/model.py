@@ -188,6 +188,8 @@ class Ensemble(Model):
         """Select base learners from candidate learners based on ensembling algorithm.
         """
         cv_errors = np.array([m.cv_error for m in self.candidate_learners])
+        # greedy ensemble forward selection
+        assert self.algorithm in {'greedy', 'stacking'}, "The ensemble selection method must be either greedy forward selection (by Caruana et al.) or stacking."
         if self.algorithm == 'greedy':
             x_tr = ()
             # initial number of models in ensemble
@@ -228,7 +230,7 @@ class Ensemble(Model):
                 if looped:
                     break
             self.second_layer_features = x_tr
-        else:
+        elif self.algorithm == 'stacking':
             self.base_learners = self.candidate_learners
             x_tr = [m.cv_predictions.reshape(-1, 1) for m in self.candidate_learners]
             self.second_layer_features = np.hstack(tuple(x_tr))
