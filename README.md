@@ -43,7 +43,7 @@ Additional arguments can be applied to customize the `AutoLearner` instance, inc
 1. Basics
 * p_type (str): Problem type, which is one of {'classification', 'regression'}. By default, 'classification'.
 * verbose (bool): Whether or not to generate print statements that showcase the progress. By default, false.
-* n_cores (int): Maximum number of CPU cores to use. The default value 'None' means no limit.
+* n_cores (int): Maximum number of CPU cores to use. The default value 'None' means no limit, i.e., up to all the CPU cores of the machine.
 * runtime_limit (int): Maximum runtime for AutoLearner fitting, in seconds. By default, 512 seconds as the timeout limit.
 * scalarization (str): Scalarization of the covariance matrix for mininum variance selection. One of {'D', 'A', 'E'}. 'D', as the default value, is the best-performing and fastest scalarization method in practice.
 * solver (str): The convex solver for classic experiment design problem. Possible value is one of {'scipy', 'cvxpy'}. By default, 'scipy'.

@@ -101,8 +101,7 @@ class AutoLearner:
         self.solver = solver
 
     def _fit(self, x_train, y_train, rank=None, runtime_limit=None):
-        """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
-        new dataset, predict performance on the rest, then construct an optimal ensemble model.
+        """This is a single round of the doubling process. It fits an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the new dataset, predict performance on the rest, then construct an optimal ensemble model.
 
         Args:
             x_train (np.ndarray):  Features of the training dataset.
@@ -216,59 +215,7 @@ class AutoLearner:
         if self.verbose:
             print('\nAutoLearner fitting complete.')
             
-    def fit_doubling(self, x_train, y_train, verbose=False):
-        """Fit an AutoLearner object, iteratively doubling allowed runtime."""
-        t_predicted = convex_opt.predict_runtime(x_train.shape)
 
-        # split data into training and validation sets
-        try:
-            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
-        except ValueError:
-            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
-
-        ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
-        t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
-        t_init = max(1, t_init)
-        times = [t_init]
-        losses = [0.5]
-
-        e_hat, actual_times, sampled, ensembles = [], [], [], []
-        k, t = ranks[0], times[0]
-
-        start = time.time()
-        counter, self.best = 0, 0
-        while time.time() - start < self.runtime_limit - t:
-            if verbose:
-                print('Fitting with k={}, t={}'.format(k, t))
-            t0 = time.time()
-            self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
-            self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
-            loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
-
-            # TEMPORARY: Record intermediate results
-            e_hat.append(np.copy(self.new_row))
-            actual_times.append(time.time() - start)
-            sampled.append(self.sampled_indices)
-            ensembles.append(self.ensemble)
-            losses.append(loss)
-
-            if loss == min(losses):
-                ranks.append(k+1)
-                self.best = counter
-            else:
-                ranks.append(k)
-         
-            times.append(2*t)
-            k = ranks[-1]
-            t = times[-1]
-            counter += 1
-
-        # after all iterations, restore best model
-        self.new_row = e_hat[self.best]
-        self.ensemble = ensembles[self.best]
-        return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
-                'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
-                'models': ensembles}
             
     def fit(self, x_train, y_train, verbose=False):
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
@@ -366,3 +313,57 @@ class AutoLearner:
             np.ndarray: Predicted labels.
         """
         return self.ensemble.predict(x_test)
+
+    
+#     def fit_doubling(self, x_train, y_train, verbose=False):
+#         """Fit an AutoLearner object, iteratively doubling allowed runtime."""
+#         t_predicted = convex_opt.predict_runtime(x_train.shape)
+#         # split data into training and validation sets
+#         try:
+#             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
+#         except ValueError:
+#             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
+
+#         ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
+#         t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
+#         t_init = max(1, t_init)
+#         times = [t_init]
+#         losses = [0.5]
+
+#         e_hat, actual_times, sampled, ensembles = [], [], [], []
+#         k, t = ranks[0], times[0]
+
+#         start = time.time()
+#         counter, self.best = 0, 0
+#         while time.time() - start < self.runtime_limit - t:
+#             if verbose:
+#                 print('Fitting with k={}, t={}'.format(k, t))
+#             t0 = time.time()
+#             self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
+#             self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
+#             loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+
+#             # TEMPORARY: Record intermediate results
+#             e_hat.append(np.copy(self.new_row))
+#             actual_times.append(time.time() - start)
+#             sampled.append(self.sampled_indices)
+#             ensembles.append(self.ensemble)
+#             losses.append(loss)
+
+#             if loss == min(losses):
+#                 ranks.append(k+1)
+#                 self.best = counter
+#             else:
+#                 ranks.append(k)
+         
+#             times.append(2*t)
+#             k = ranks[-1]
+#             t = times[-1]
+#             counter += 1
+
+#         # after all iterations, restore best model
+#         self.new_row = e_hat[self.best]
+#         self.ensemble = ensembles[self.best]
+#         return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
+#                 'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
+#                 'models': ensembles}
