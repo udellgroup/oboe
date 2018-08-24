@@ -37,6 +37,7 @@ class AutoLearner:
         error_matrix (DataFrame):      Error matrix to use for imputation; includes index and headers.
         runtime_matrix (DataFrame):    Runtime matrix to use for runtime prediction; includes index and headers.
         new_row (np.ndarray):          Predicted row of error matrix.
+        solver (str):                  The convex solver for classic experiment design problem. One of {'scipy', 'cvxpy'}.
         ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking'}.
         
     Attributes to be added in the future:
@@ -52,7 +53,8 @@ class AutoLearner:
                  n_cores=mp.cpu_count(), runtime_limit=512,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None, new_row=None,
-                 ensemble_method='greedy', **stacking_hyperparams):
+                 ensemble_method='greedy', solver='scipy',
+                 **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
         assert selection_method in {'qr', 'min_variance'}, "The method to select entries to sample must be " \
@@ -94,6 +96,9 @@ class AutoLearner:
         self.ensemble_method = ensemble_method
         self.stacking_hyperparams = stacking_hyperparams
         self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
+        
+        # convex solver
+        self.solver = solver
 
     def _fit(self, x_train, y_train, rank=None, runtime_limit=None):
         """Fit an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the
@@ -121,7 +126,7 @@ class AutoLearner:
             valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
             Y = self.Y[:rank, valid]
             # TODO: check if Y is rank-deficient, i.e. will ED problem fail?
-            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization)
+            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization, self.solver)
             to_sample = valid[np.where(v_opt > 0.9)[0]]
             if np.isnan(to_sample).any():
                 to_sample = np.argsort(t_predicted)[:rank]
@@ -132,8 +137,6 @@ class AutoLearner:
             # if no columns are selected in first iteration (log det instability), sample n fastest columns
             n = len(np.where(np.cumsum(np.sort(t_predicted)) <= runtime_limit/4)[0])
             to_sample = np.argsort(t_predicted)[:n]
-            
-        
 
         # only need to compute column entry if it has not been computed already
         to_sample = list(set(to_sample) - self.sampled_indices)

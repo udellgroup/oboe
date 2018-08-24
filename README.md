@@ -16,7 +16,7 @@ oboe requires:
 * scipy  (>= 0.13.3)
 * pandas (>=0.22.0)
 * scikit-learn  (>= 0.18)
-* multiprocessing
+* multiprocessing (>=0.70.5)
 * OpenML (>=0.7.0)
 * mkl (>=1.0.0)
 * re
@@ -46,6 +46,7 @@ Additional arguments can be applied to customize the `AutoLearner` instance, inc
 * n_cores (int): Maximum number of CPU cores to use. The default value 'None' means no limit.
 * runtime_limit (int): Maximum runtime for AutoLearner fitting, in seconds. By default, 512 seconds as the timeout limit.
 * scalarization (str): Scalarization of the covariance matrix for mininum variance selection. One of {'D', 'A', 'E'}. 'D', as the default value, is the best-performing and fastest scalarization method in practice.
+* solver (str): The convex solver for classic experiment design problem. Possible value is one of {'scipy', 'cvxpy'}. By default, 'scipy'.
 * stacking_alg(str): The method used for ensemble construction. One of {'greedy', 'stacking'}. By default, 'greedy'.
 2. Further customization
 * algorithms (list): A list of algorithm types to be considered, in strings, e.g. ['KNN', 'lSVM']. By default, all the algorithms in the error matrix. 

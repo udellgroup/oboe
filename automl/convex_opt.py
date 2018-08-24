@@ -42,7 +42,8 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
         result = prob.solve()
         v_sol = np.array(v.value).T[0]
         return v_sol
-
+    
+    # It is observed the scipy.optimize solver in this problem usually converges within 50 iterations. Thus a maximum of 50 step is set as limit.
     elif solver == 'scipy':
         if scalarization == 'D':
             def objective(v):
@@ -51,20 +52,16 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
         elif scalarization == 'A':
             def objective(v):
                 return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
-
         elif scalarization == 'E':
             def objective(v):
                 return np.linalg.norm(np.linalg.pinv(Y @ np.diag(v) @ Y.T), ord=2)
-
         def constraint(v):
             return t_max * n_cores- t_predicted @ v
-
         v0 = np.full((n, ), 0.5)
         constraints = {'type': 'ineq', 'fun': constraint}
         v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, options={'maxiter': 50},
                          constraints=constraints)
         return v_opt.x
-
 
 def predict_runtime(size, runtime_matrix=None, saved_model=None, save=False):
     """Predict the runtime for each model setting on a dataset with given shape.
