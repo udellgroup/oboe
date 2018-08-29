@@ -116,7 +116,6 @@ class AutoLearner:
         if self.verbose:
             print('Fitting AutoLearner with max. runtime {}s'.format(runtime_limit))
         t_predicted = convex_opt.predict_runtime(x_train.shape, runtime_matrix=self.runtime_matrix)
-        
 
         if self.selection_method == 'qr':
             to_sample = linalg.pivot_columns(self.error_matrix)
@@ -205,6 +204,7 @@ class AutoLearner:
 
         if self.verbose:
             print('\nFitting ensemble of max. size {}...'.format(len(self.ensemble.candidate_learners)))
+        # ensemble selection and fitting in the remaining time budget
         self.ensemble.fit(x_train, y_train, remaining, self.fitted_models)
         for model in self.ensemble.base_learners:
             assert model.index is not None
@@ -214,7 +214,6 @@ class AutoLearner:
 
         if self.verbose:
             print('\nAutoLearner fitting complete.')
-            
 
             
     def fit(self, x_train, y_train, verbose=False):
@@ -289,6 +288,9 @@ class AutoLearner:
         # after all iterations, restore best model
         self.new_row = e_hat[self.best]
         self.ensemble = ensembles[self.best]
+        
+#        #refit
+#        self.ensemble.fit(x_train, y_train)
         return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
                 'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
                 'models': ensembles}
@@ -302,7 +304,7 @@ class AutoLearner:
             y_train (np.ndarray): Labels of the training dataset.
         """
         assert self.ensemble.fitted, "Cannot refit unless model has been fit."
-        self.ensemble.fit(x_train, y_train)
+        self.ensemble.refit(x_train, y_train)
 
     def predict(self, x_test):
         """Generate predictions on test data.

@@ -236,24 +236,41 @@ class Ensemble(Model):
             self.second_layer_features = np.hstack(tuple(x_tr))
 
     def fit(self, x_train, y_train, runtime_limit=None, fitted_base_learners=None):
-        """Fit ensemble model on training data.
+        """Add models to the ensemble and fit the ensemble on training data.
 
         Args:
             x_train (np.ndarray):        Features of the training dataset.
             y_train (np.ndarray):        Labels of the training dataset.
-            runtime_limit (float):       Maximum runtime to be allocated to fitting.
             fitted_base_learners (list): A list of already fitted models.
+            
+        Args to be implemented:
+            runtime_limit (float):       Maximum runtime to be allocated to fitting.
         """
         self.select_base_learners(y_train, fitted_base_learners)
-
         # TODO: parallelize training over base learners
         for model in self.base_learners:
             if not model.fitted:
                 model.fit(x_train, y_train)
-
         if self.algorithm != 'greedy':
             self.model.fit(self.second_layer_features, y_train)
         self.fitted = True
+
+    def refit(self, x_train, y_train):
+        """Fit ensemble model on training data with base learners already added and unchanged.
+            
+        Args:
+            x_train (np.ndarray):        Features of the training dataset.
+            y_train (np.ndarray):        Labels of the training dataset.
+            
+        Args to be implemented:
+            runtime_limit (float):       Maximum runtime to be allocated to fitting.
+        """
+        # TODO: parallelize training over base learners
+        for model in self.base_learners:
+            if not model.fitted:
+                model.fit(x_train, y_train)
+        if self.algorithm != 'greedy':
+            self.model.fit(self.second_layer_features, y_train)
 
     def predict(self, x_test):
         """Generate predictions of the ensemble model on test data.
