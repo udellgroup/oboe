@@ -292,3 +292,21 @@ class Ensemble(Model):
         else:
             return self.model.predict(x_te)
 
+    def get_models(self):
+        """Get details of the selected machine learning models and the ensemble.
+        """
+        base_learner_names = {}
+        for model in self.base_learners:
+            if model.algorithm in base_learner_names.keys():
+                base_learner_names[model.algorithm].append(model.hyperparameters)
+            else:
+                base_learner_names[model.algorithm] = [model.hyperparameters]
+        if self.algorithm == 'greedy':
+            return {'ensemble method': 'greedy selection', 'base learners': base_learner_names}
+        elif self.algorithm == 'stacking':
+            ensemble_learner_name = {}
+            ensemble_learner_name[self.model.algorithm] = self.model.hyperparameters
+            return {'ensemble method': 'stacking', 'ensemble learner': ensemble_learner_name, 'base learners': base_learner_names}
+
+
+

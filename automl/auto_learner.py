@@ -18,8 +18,8 @@ import signal
 from contextlib import contextmanager
 
 DEFAULTS = pkg_resources.resource_filename(__name__, 'defaults')
-ERROR_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0)
-RUNTIME_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'runtime_matrix.csv'), index_col=0)
+ERROR_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0, header=0)
+RUNTIME_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'runtime_matrix.csv'), index_col=0, header=0)
 
 
 class AutoLearner:
@@ -79,8 +79,8 @@ class AutoLearner:
 
         # error matrix attributes
         # TODO: determine whether to generate new error matrix or use default/subset of default
-        self.error_matrix = ERROR_MATRIX if error_matrix is None else error_matrix
-        self.runtime_matrix = RUNTIME_MATRIX if runtime_matrix is None else runtime_matrix
+        self.error_matrix = util.extract_columns(ERROR_MATRIX, self.algorithms, self.hyperparameters) if error_matrix is None else error_matrix
+        self.runtime_matrix = util.extract_columns(RUNTIME_MATRIX, self.algorithms, self.hyperparameters) if runtime_matrix is None else runtime_matrix
         assert util.check_dataframes(self.error_matrix, self.runtime_matrix)
         self.column_headings = np.array([eval(heading) for heading in list(self.error_matrix)])
         self.X, self.Y, _ = linalg.pca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
@@ -315,6 +315,11 @@ class AutoLearner:
             np.ndarray: Predicted labels.
         """
         return self.ensemble.predict(x_test)
+
+    def get_models(self):
+        """Get details of the selected machine learning models and the ensemble.
+        """
+        return self.ensemble.get_models()
 
     
 #     def fit_doubling(self, x_train, y_train, verbose=False):

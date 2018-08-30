@@ -51,6 +51,23 @@ DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regr
             'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
 
 
+def extract_columns(df, algorithms=None, hyperparameters=None):
+    """
+    Extract certain columns of the error matrix.
+    
+    Args:
+        error_matrix (DataFrame):    The error matrix to be extracted.
+        algorithms (list):           A list of algorithms as search space.
+        
+    Args to be implemented:
+        hyperparameters (list):      A list of hyperparameters as search space.
+    """
+    sampled_columns = []
+    for item in list(df):
+        if eval(item)['algorithm'] in algorithms:
+            sampled_columns.append(item)
+    return df[sampled_columns]
+
 def error(y_true, y_predicted, p_type):
     """Compute error metric for the model; varies based on classification/regression and algorithm type.
     BER (Balanced Error Rate): For classification.
