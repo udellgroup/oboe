@@ -41,7 +41,7 @@ class Model:
         Returns:
             object: A scikit-learn object.
         """
-        if self.algorithm.lower() == 'greedy':
+        if self.algorithm == None or self.algorithm.lower() == 'greedy':
             return None
         try:
             return getattr(util, self.algorithm)(random_state=RANDOM_STATE, **self.hyperparameters)
@@ -269,7 +269,7 @@ class Ensemble(Model):
         for model in self.base_learners:
             if not model.fitted:
                 model.fit(x_train, y_train)
-        if self.algorithm != 'greedy':
+        if self.algorithm == 'stacking':
             self.model.fit(self.second_layer_features, y_train)
 
     def predict(self, x_test):
@@ -286,11 +286,11 @@ class Ensemble(Model):
         for model in self.base_learners:
             y_predicted = np.reshape(model.predict(x_test), [-1, 1])
             base_learner_predictions += (y_predicted, )
-        x_te = np.hstack(base_learner_predictions)
+        self.x_te = np.hstack(base_learner_predictions)
         if self.algorithm == 'greedy':
-            return mode(x_te, axis=1)[0].reshape((1, -1))
+            return mode(self.x_te, axis=1)[0].reshape((1, -1))
         else:
-            return self.model.predict(x_te)
+            return self.model.predict(self.x_te)
 
     def get_models(self):
         """Get details of the selected machine learning models and the ensemble.
@@ -307,6 +307,84 @@ class Ensemble(Model):
             ensemble_learner_name = {}
             ensemble_learner_name[self.model.algorithm] = self.model.hyperparameters
             return {'ensemble method': 'stacking', 'ensemble learner': ensemble_learner_name, 'base learners': base_learner_names}
+
+    def get_model_accuracy(self, y_test):
+    """ Get prediction accuracies of each base learner when the true test labels are provided.
+        
+        Args:
+            y_test (np.array):      True labels of the test set.
+            
+        Returns:
+            accuracies (list):      A numerical list of individual model accuracies on the test set.
+    """
+        accuracies = []
+        for iter in range(self.x_te.shape[1]):
+            accuracies.append(util.error(y_test, self.x_te[:, iter], self.p_type))
+        return accuracies
+
+
+class Model_collection(Ensemble):
+    """An object representing a collection of individual machine learning models.
+        
+        Attributes:
+            p_type (str):           Either 'classification' or 'regression'.
+    """
+    def __init__(self, p_type):
+        super().__init__(p_type=p_type, algorithm=None, hyperparameters=None)
+
+    def select_base_learners(self):
+    """ Set inidividual learners to be all the learners added to the collection.
+    """
+        self.base_learners = self.candidate_learners
+
+    def fit(self, x_train, y_train, runtime_limit=None, fitted_base_learners=None):
+    """ Fit inidividual learners in the model collection on training dataset.
+        
+        Args:
+            x_train (np.ndarray):        Features of the training dataset.
+            y_train (np.ndarray):        Labels of the training dataset.
+        """
+        self.select_base_learners()
+        super().refit(x_train=x_train, y_train=y_train)
+        self.fitted = True
+
+    def predict(self, x_test):
+        """Generate predictions of the individual learners on test data.
+            
+        Args:
+            x_test (np.ndarray): Features of the test dataset.
+            
+        Returns:
+            np.ndarray: A 2-dimensional array containing predicted labels of the test dataset. Each column corresponds to the predictions of one single base learner.
+        """
+        assert len(self.base_learners) > 0, "Ensemble size must be greater than zero."
+        
+        base_learner_predictions = ()
+        for model in self.base_learners:
+            y_predicted = np.reshape(model.predict(x_test), [-1, 1])
+            base_learner_predictions += (y_predicted, )
+        # concatenation of predictions of each base learner
+        self.x_te = np.hstack(base_learner_predictions)
+        return self.x_te
+
+    def get_models(self):
+        """Get details of the selected machine learning models and the ensemble.
+        """
+        base_learner_names = {}
+        for model in self.base_learners:
+            if model.algorithm in base_learner_names.keys():
+                base_learner_names[model.algorithm].append(model.hyperparameters)
+            else:
+                base_learner_names[model.algorithm] = [model.hyperparameters]
+        return base_learner_names
+
+
+
+
+
+
+
+
 
 
 

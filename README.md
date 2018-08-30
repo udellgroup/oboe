@@ -42,14 +42,16 @@ m.predict(x_test)
 Additional arguments can be applied to customize the `AutoLearner` instance, including:
 1. Basics
 * p_type (str): Problem type, which is one of {'classification', 'regression'}. By default, 'classification'.
-* verbose (bool): Whether or not to generate print statements that showcase the progress. By default, false.
+* verbose (Boolean): Whether or not to generate print statements that showcase the progress. By default, false.
 * n_cores (int): Maximum number of CPU cores to use. The default value 'None' means no limit, i.e., up to all the CPU cores of the machine.
 * runtime_limit (int): Maximum runtime for AutoLearner fitting, in seconds. By default, 512 seconds as the timeout limit.
 * scalarization (str): Scalarization of the covariance matrix for mininum variance selection. One of {'D', 'A', 'E'}. 'D', as the default value, is the best-performing and fastest scalarization method in practice.
 * solver (str): The convex solver for classic experiment design problem. Possible value is one of {'scipy', 'cvxpy'}. By default, 'scipy'.
+* build_ensemble (Boolean): Whether to build an ensemble of promising models.
 * stacking_alg(str): The method used for ensemble construction. One of {'greedy', 'stacking'}. By default, 'greedy'.
-2. Further customization
-* algorithms (list): A list of algorithm types to be considered, in strings, e.g. ['KNN', 'lSVM']. By default, all the algorithms in the error matrix. 
+
+2. Advanced customization
+* algorithms (list): A list of algorithm types to be considered, in strings, e.g. ['KNN', 'lSVM']. By default, all the algorithms in the error matrix. The supported classification algorithms are: 'AB' (Adaboost), 'DT' (decision tree), 'ExtraTrees' (extra trees), 'GBT' (gradient boosting), 'GNB' (Gaussian naive Bayes), 'KNN' (kNN), 'Logit' (logistic regression), 'MLP' (multilayer perceptron), 'Perceptron' (perceptron), 'RF' (random forest), 'kSVM' (kernel SVM), 'lSVM' (linear SVM).
 * hyperparameters (dict): A nested dict of hyperparameters to be considered. By default, all the model hyperparameters in the error matrix.
 * error_matrix (DataFrame): Error matrix to use for imputation, includes indices and headers. The one in `defaults` folder is used by default.
 * runtime_matrix (DataFrame): Runtime matrix to use for runtime prediction, includes indices and headers. The one in `defaults` folder is used by default.

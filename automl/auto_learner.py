@@ -12,7 +12,7 @@ import pandas as pd
 import pkg_resources
 import time
 import util
-from model import Model, Ensemble
+from model import Model, Ensemble, Model_collection
 from sklearn.model_selection import train_test_split
 import signal
 from contextlib import contextmanager
@@ -53,7 +53,7 @@ class AutoLearner:
                  n_cores=mp.cpu_count(), runtime_limit=512,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None, new_row=None,
-                 ensemble_method='greedy', solver='scipy',
+                 build_ensemble=True, ensemble_method='greedy', solver='scipy',
                  **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
@@ -93,9 +93,13 @@ class AutoLearner:
         self.fitted_models = [None] * self.error_matrix.shape[1]
 
         # ensemble attributes
+        self.build_ensemble = build_ensemble
         self.ensemble_method = ensemble_method
         self.stacking_hyperparams = stacking_hyperparams
-        self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
+        if self.build_ensemble:
+            self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
+        else:
+            self.ensemble = Model_collection(self.p_type)
         
         # convex solver
         self.solver = solver
@@ -217,6 +221,8 @@ class AutoLearner:
 
             
     def fit(self, x_train, y_train, verbose=False):
+
+
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
         t_predicted = convex_opt.predict_runtime(x_train.shape)
 
@@ -227,8 +233,11 @@ class AutoLearner:
             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
 
         ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
-        t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
-        t_init = max(1, t_init)
+        if self.build_ensemble:
+            t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
+            t_init = max(1, t_init)
+        else:
+            t_init = self.runtime_limit / 2
         times = [t_init]
         losses = [0.5]
 
@@ -243,27 +252,32 @@ class AutoLearner:
                 if verbose:
                     print('Fitting with k={}, t={}'.format(k, t))
                 t0 = time.time()
-                self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
-                self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
-                loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
-
-                # TEMPORARY: Record intermediate results
-                e_hat.append(np.copy(self.new_row))
-                actual_times.append(time.time() - start)
-                sampled.append(self.sampled_indices)
-                ensembles.append(self.ensemble)
-                losses.append(loss)
-
-                if loss == min(losses):
-                    ranks.append(k+1)
-                    self.best = counter
+                if self.build_ensemble:
+                    self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
                 else:
-                    ranks.append(k)
+                    self.ensemble = Model_collection(self.p_type)
+                self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
+                if self.build_ensemble:
+                    loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 
-                times.append(2*t)
-                k = ranks[-1]
-                t = times[-1]
-                counter += 1
+                    # TEMPORARY: Record intermediate results
+
+                    e_hat.append(np.copy(self.new_row))
+                    actual_times.append(time.time() - start)
+                    sampled.append(self.sampled_indices)
+                    ensembles.append(self.ensemble)
+                    losses.append(loss)
+
+                    if loss == min(losses):
+                        ranks.append(k+1)
+                        self.best = counter
+                    else:
+                        ranks.append(k)
+
+                    times.append(2*t)
+                    k = ranks[-1]
+                    t = times[-1]
+                    counter += 1
                 
         class TimeoutException(Exception): pass
 
@@ -285,15 +299,16 @@ class AutoLearner:
             if verbose:
                 print("Time limit reached.")
 
-        # after all iterations, restore best model
-        self.new_row = e_hat[self.best]
-        self.ensemble = ensembles[self.best]
-        
-#        #refit
-#        self.ensemble.fit(x_train, y_train)
-        return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
+        if self.build_ensemble:
+            # after all iterations, restore best model
+            self.new_row = e_hat[self.best]
+            self.ensemble = ensembles[self.best]
+
+            return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
                 'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
                 'models': ensembles}
+        else:
+            return
 
     def refit(self, x_train, y_train):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
@@ -320,6 +335,11 @@ class AutoLearner:
         """Get details of the selected machine learning models and the ensemble.
         """
         return self.ensemble.get_models()
+
+    def get_model_accuracy(self, y_test):
+        """ Get accuracies of selected models.
+        """
+        return self.ensemble.get_model_accuracy(y_test)
 
     
 #     def fit_doubling(self, x_train, y_train, verbose=False):
