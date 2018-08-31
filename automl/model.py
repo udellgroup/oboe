@@ -309,14 +309,14 @@ class Ensemble(Model):
             return {'ensemble method': 'stacking', 'ensemble learner': ensemble_learner_name, 'base learners': base_learner_names}
 
     def get_model_accuracy(self, y_test):
-    """ Get prediction accuracies of each base learner when the true test labels are provided.
-        
-        Args:
-            y_test (np.array):      True labels of the test set.
+        """ Get prediction accuracies of each base learner when the true test labels are provided.
             
-        Returns:
-            accuracies (list):      A numerical list of individual model accuracies on the test set.
-    """
+            Args:
+                y_test (np.array):      True labels of the test set.
+                
+            Returns:
+                accuracies (list):      A numerical list of individual model accuracies on the test set.
+        """
         accuracies = []
         for iter in range(self.x_te.shape[1]):
             accuracies.append(util.error(y_test, self.x_te[:, iter], self.p_type))
@@ -333,12 +333,12 @@ class Model_collection(Ensemble):
         super().__init__(p_type=p_type, algorithm=None, hyperparameters=None)
 
     def select_base_learners(self):
-    """ Set inidividual learners to be all the learners added to the collection.
-    """
+        """ Set inidividual learners to be all the learners added to the collection.
+        """
         self.base_learners = self.candidate_learners
 
     def fit(self, x_train, y_train, runtime_limit=None, fitted_base_learners=None):
-    """ Fit inidividual learners in the model collection on training dataset.
+        """ Fit inidividual learners in the model collection on training dataset.
         
         Args:
             x_train (np.ndarray):        Features of the training dataset.

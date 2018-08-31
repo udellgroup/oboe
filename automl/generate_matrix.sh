@@ -1,84 +1,102 @@
 #!/usr/bin/env bash
 
-# Shell script to generate error matrix (and merge results), parallelizing across datasets.
+# Shell script to generate error matrix (and merge results), parallelized across datasets.
 
 usage () {
-    cat <<HELP_USAGE
-    Usage:
-    $0  [-m] mode <save_dir> <data_dir> <p_type> <json> <err_mtx> <max_procs> <auc>
+cat <<HELP_USAGE
+Usage:
+$0  [-m] mode [-s] SAVE_DIR [-d] DATA_DIR [-p] P_TYPE [-j] JSON_FILE [-e] ERROR_MATRIX [-n] MAX_PROCS [-a] AUC [-f] FULLNAME
 
-   -m:         mode in which to run, either "generate" or "merge".
-   <save_dir>: (g) where to save results / (m) where results are saved.
-   <data_dir>: (g) path to directory containing training datasets are located.
-   <p_type>:   (g) problem type, either "classification" or "regression".
-   <json>:     (g) path to model configurations json file.
-   <err_mtx>   (g) error matrix already generated.
-   <max_procs>:(g) maximum number of processes assigned to error matrix generation.
-   <auc>:      (g) whether to use AUC instead of BER
+-m:         mode in which to run, either "generate" or "merge"
+-s:         where to save results / (m) where results are saved
+-d:         path to directory containing training datasets are located
+-p:         problem type, either "classification" or "regression"
+-j:         path to model configurations json file
+-e:         error matrix already generated
+-n:         maximum number of processes assigned to error matrix generation.
+-a:         whether to use AUC instead of BER
+-f:         whether to use dataset file full name as dataset name
 HELP_USAGE
 }
 
 # parse user arguments
-while getopts ":m:" opt; do
-  case ${opt} in
+while getopts ":m:s:d:p:j:e:n:a:" opt; do
+    case ${opt} in
     m)
-      if [ ${OPTARG} != "generate" ] && [ ${OPTARG} != "merge" ]
-      then
-        echo "Invalid mode."
+        if [ ${OPTARG} != "generate" ] && [ ${OPTARG} != "merge" ]
+        then
+            echo "Invalid mode."
+            usage
+            exit 1
+        fi
+        echo "Running in ${OPTARG} mode..." >&2
+        mode=${OPTARG}
+        ;;
+    s)
+        SAVE_DIR=$OPTARG
+        ;;
+    d)
+        DATA_DIR=$OPTARG
+        ;;
+    p)
+        P_TYPE=$OPTARG
+        ;;
+    j)
+        JSON_FILE=$OPTARG
+        ;;
+    e)
+        ERROR_MATRIX=$OPTARG
+        ;;
+    n)
+        MAX_PROCS=$OPTARG
+        ;;
+    a)
+        AUC=$OPTARG
+        ;;
+    f)
+        FULLNAME=$OPTARG
+        ;;
+    \?)
+        echo "Invalid option: -${OPTARG}" >&2
         usage
         exit 1
-      fi
-      echo "Running in ${OPTARG} mode..." >&2
-      mode=${OPTARG}
-      ;;
-    \?)
-      echo "Invalid option: -${OPTARG}" >&2
-      usage
-      exit 1
-      ;;
-  esac
+        ;;
+esac
 done
 
-if [ "$1" == "" ]
-then
-  echo "Must specify mode."
-  usage
-  exit 1
-fi
+#if [ "$1" == "" ]
+#then
+#  echo "Must specify mode."
+#  usage
+#  exit 1
+#fi
 
 # no limit for maximum number of processes if no number is given
-if [ "$7" == "" ]
+if [ "${MAX_PROCS}" == "" ]
 then
-  "$7" = "0"
+    MAX_PROCS="0"
 fi
 
 # default to not using AUC
-if [ "$8" == "" ]
+if [ "${AUC}" == "" ]
 then
-  "$8" = "False"
+    AUC="False"
 fi
 
 # default to not using fullname
-if [ "$9" == "" ]
+if [ "${FULLNAME}" == "" ]
 then
-  "$9" = "False"
+    FULLNAME="False"
 fi
 
 # strip '/' from end of file path (if there is one)
-SAVE_DIR=${3%/}
-DATA_DIR=${4%/}
-P_TYPE=$5
-JSON_FILE=$6
-MAX_PROCS=$7
-AUC=$8
-FULLNAME=$9
-ERROR_MATRIX=$10
-
+#SAVE_DIR=${3%/}
+#DATA_DIR=${4%/}
 
 # location of this script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# generate mode - runs at most 90 parallel processes (can be changed by editing --max-procs=90 below)
+# generate mode
 if [ "${mode}" == "generate" ]
 then
   time=`date +%Y%m%d%H%M`
