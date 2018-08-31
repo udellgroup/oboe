@@ -78,7 +78,7 @@ ERROR_MATRIX=$10
 # location of this script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# generate mode - runs at most 90 parallel processes (can be changed by editing --max-procs=90 below)
+# generate mode
 if [ "${mode}" == "generate" ]
 then
   time=`date +%Y%m%d%H%M`
