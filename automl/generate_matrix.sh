@@ -5,23 +5,28 @@
 usage () {
 cat <<HELP_USAGE
 Usage:
-$0  [-m] mode [-s] SAVE_DIR [-d] DATA_DIR [-p] P_TYPE [-j] JSON_FILE [-e] ERROR_MATRIX [-n] MAX_PROCS [-a] AUC [-f] FULLNAME
+$0  [-m] mode [-s] SAVE_DIR [-d] DATA_DIR [-p] P_TYPE [-j] JSON_FILE [-e] ERROR_MATRIX [-n] MAX_PROCS [-a] AUC [-f] FULLNAME [-h]
 
 -m:         mode in which to run, either "generate" or "merge"
--s:         where to save results / (m) where results are saved
+-s:         where to save results, or in the merge mode, where results are saved
 -d:         path to directory containing training datasets are located
 -p:         problem type, either "classification" or "regression"
 -j:         path to model configurations json file
 -e:         error matrix already generated
--n:         maximum number of processes assigned to error matrix generation.
+-n:         maximum number of processes assigned to error matrix generation
 -a:         whether to use AUC instead of BER
 -f:         whether to use dataset file full name as dataset name
+-h:         show this help information
 HELP_USAGE
 }
 
 # parse user arguments
-while getopts ":m:s:d:p:j:e:n:a:" opt; do
+while getopts ":hm:s:d:p:j:e:n:a:" opt; do
     case ${opt} in
+    h)
+        usage
+        exit 1
+        ;;
     m)
         if [ ${OPTARG} != "generate" ] && [ ${OPTARG} != "merge" ]
         then
