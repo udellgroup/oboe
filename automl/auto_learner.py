@@ -53,7 +53,7 @@ class AutoLearner:
                  n_cores=mp.cpu_count(), runtime_limit=512,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None, new_row=None,
-                 build_ensemble=True, ensemble_method='greedy', solver='scipy',
+                 build_ensemble=True, ensemble_method='greedy', solver='scipy', coca=False,
                  **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
@@ -78,12 +78,16 @@ class AutoLearner:
         self.scalarization = scalarization
 
         # error matrix attributes
+        self.coca = coca
         # TODO: determine whether to generate new error matrix or use default/subset of default
         self.error_matrix = util.extract_columns(ERROR_MATRIX, self.algorithms, self.hyperparameters) if error_matrix is None else error_matrix
         self.runtime_matrix = util.extract_columns(RUNTIME_MATRIX, self.algorithms, self.hyperparameters) if runtime_matrix is None else runtime_matrix
         assert util.check_dataframes(self.error_matrix, self.runtime_matrix)
         self.column_headings = np.array([eval(heading) for heading in list(self.error_matrix)])
-        self.X, self.Y, _ = linalg.pca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
+        if not self.coca:
+            self.X, self.Y, _ = linalg.pca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
+        else:
+            self.X, self.Y, _ = linalg.coca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
 
         # sampled & fitted models
         self.new_row = new_row or np.zeros((1, self.error_matrix.shape[1]))
@@ -161,7 +165,10 @@ class AutoLearner:
             sample_models[i].sampled = True
             self.new_row[:, to_sample[i]] = cv_error.mean()
             self.sampled_models[to_sample[i]] = sample_models[i]
-        imputed = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+        if not self.coca:
+            imputed = linalg.impute(self.error_matrix.values, self.new_row, list(self.sampled_indices), rank=rank)
+        else:
+            imputed = linalg.impute_coca(self.error_matrix.values, self.new_row, list(self.sampled_indices), rank=rank)
 
         # impute ALL entries
         # unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
