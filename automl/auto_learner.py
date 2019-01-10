@@ -132,6 +132,21 @@ class AutoLearner:
             to_sample = valid[np.where(v_opt > 0.9)[0]]
             if np.isnan(to_sample).any():
                 to_sample = np.argsort(t_predicted)[:rank]
+        
+        elif self.selection_method == 'random':
+            t0 = time.time()
+            while time.time() - t0 < runtime_limit/2:
+                # set of algorithms that are predicted to run in given budget
+                options = np.where(t_predicted <= runtime_limit/2 - (time.time() - t0))[0]
+                # remove algorithms that have been sampled already
+                options = list(set(options) - self.sampled_indices)
+                if len(options) == 0:
+                    if len(self.ensemble.candidate_learners) == 0:
+                        to_sample = np.argmin(t_predicted)
+                    else:
+                        break
+                else:
+                    to_sample = np.random.choice(options)
         else:
             to_sample = np.arange(0, self.new_row.shape[1])
 
