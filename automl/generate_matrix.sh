@@ -21,7 +21,7 @@ HELP_USAGE
 }
 
 # parse user arguments
-while getopts ":hm:s:d:p:j:e:n:a:" opt; do
+while getopts ":hm:s:d:p:j:e:n:a:f:" opt; do
     case ${opt} in
     h)
         usage

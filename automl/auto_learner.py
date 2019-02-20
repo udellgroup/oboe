@@ -57,8 +57,8 @@ class AutoLearner:
                  **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
-        assert selection_method in {'qr', 'min_variance'}, "The method to select entries to sample must be " \
-            "either qr (QR decomposition) or min_variance (minimize variance with time constraints)."
+        assert selection_method in {'qr', 'min_variance', 'random'}, "The method to select entries to sample must be " \
+            "either qr (QR decomposition), min_variance (minimize variance with time constraints), or random (time-constrained random selection, for testing purpose)."
 
         with open(os.path.join(DEFAULTS, p_type + '.json')) as file:
             defaults = json.load(file)
@@ -134,19 +134,20 @@ class AutoLearner:
                 to_sample = np.argsort(t_predicted)[:rank]
         
         elif self.selection_method == 'random':
-            t0 = time.time()
-            while time.time() - t0 < runtime_limit/2:
-                # set of algorithms that are predicted to run in given budget
-                options = np.where(t_predicted <= runtime_limit/2 - (time.time() - t0))[0]
-                # remove algorithms that have been sampled already
-                options = list(set(options) - self.sampled_indices)
-                if len(options) == 0:
-                    if len(self.ensemble.candidate_learners) == 0:
-                        to_sample = np.argmin(t_predicted)
-                    else:
-                        break
-                else:
-                    to_sample = np.random.choice(options)
+            to_sample = []
+            # set of algorithms that are predicted to finish within given budget
+            to_sample_candidates = np.where(t_predicted <= runtime_limit/2)[0]
+            # remove algorithms that have been sampled already
+            to_sample_candidates = list(set(to_sample_candidates) - self.sampled_indices)
+            print("to_sample_candidates:{}".format(to_sample_candidates))
+            # if the remaining time is not sufficient for random sampling
+            if len(to_sample_candidates) == 0:
+                to_sample = np.array([np.argmin(t_predicted)])
+            else:
+                print("sufficient remaining time!")
+                print("n_cores:{}".format(self.n_cores))
+                to_sample = np.random.choice(to_sample_candidates, min(self.n_cores, len(to_sample_candidates)), replace=False)
+            print("to_sample:{}".format(to_sample))
         else:
             to_sample = np.arange(0, self.new_row.shape[1])
 
@@ -154,54 +155,61 @@ class AutoLearner:
             # if no columns are selected in first iteration (log det instability), sample n fastest columns
             n = len(np.where(np.cumsum(np.sort(t_predicted)) <= runtime_limit/4)[0])
             to_sample = np.argsort(t_predicted)[:n]
+            
+        start = time.time()        
+        if self.selection_method is not 'random':            
+            # only need to compute column entry if it has not been computed already
+            to_sample = list(set(to_sample) - self.sampled_indices)
+            if self.verbose:
+                print('Sampling {} entries of new row...'.format(len(to_sample)))            
+            p1 = mp.Pool(self.n_cores)
+            sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
+                                   self.column_headings[i]['hyperparameters'], self.verbose, i) for i in to_sample]
+            sample_model_errors = [p1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5])
+                                   for m in sample_models]
+            p1.close()
+            p1.join()
 
-        # only need to compute column entry if it has not been computed already
-        to_sample = list(set(to_sample) - self.sampled_indices)
-        if self.verbose:
-            print('Sampling {} entries of new row...'.format(len(to_sample)))
-        start = time.time()
-        p1 = mp.Pool(self.n_cores)
-        sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
-                               self.column_headings[i]['hyperparameters'], self.verbose, i) for i in to_sample]
-        sample_model_errors = [p1.apply_async(Model.kfold_fit_validate, args=[m, x_train, y_train, 5])
-                               for m in sample_models]
-        p1.close()
-        p1.join()
+            # update sampled indices
+            self.sampled_indices = self.sampled_indices.union(set(to_sample))
+            for i, error in enumerate(sample_model_errors):
+                cv_error, cv_predictions = error.get()
+                sample_models[i].cv_error, sample_models[i].cv_predictions = cv_error.mean(), cv_predictions
+                sample_models[i].sampled = True
+                self.new_row[:, to_sample[i]] = cv_error.mean()
+                self.sampled_models[to_sample[i]] = sample_models[i]
+            imputed = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
 
-        # update sampled indices
-        self.sampled_indices = self.sampled_indices.union(set(to_sample))
-        for i, error in enumerate(sample_model_errors):
-            cv_error, cv_predictions = error.get()
-            sample_models[i].cv_error, sample_models[i].cv_predictions = cv_error.mean(), cv_predictions
-            sample_models[i].sampled = True
-            self.new_row[:, to_sample[i]] = cv_error.mean()
-            self.sampled_models[to_sample[i]] = sample_models[i]
-        imputed = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+            # impute ALL entries
+            # unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
+            # self.new_row[:, unknown] = imputed[:, unknown]
+            self.new_row = imputed.copy()
 
-        # impute ALL entries
-        # unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
-        # self.new_row[:, unknown] = imputed[:, unknown]
-        self.new_row = imputed
-
-        # k-fold fit candidate learners of ensemble
-        remaining = (runtime_limit - (time.time()-start)) * self.n_cores
-        # add best sampled model to list of candidate learners to avoid empty lists
-        best_sampled_idx = list(self.sampled_indices)[int(np.argmin(self.new_row[:, list(self.sampled_indices)]))]
-        assert self.sampled_models[best_sampled_idx] is not None
-        candidate_indices = [best_sampled_idx]
-        self.ensemble.candidate_learners.append(self.sampled_models[best_sampled_idx])
-        for i in np.argsort(self.new_row[0]):
-            if t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining:
-                last = candidate_indices.pop()
-                assert last == best_sampled_idx
-                candidate_indices.append(i)
-                candidate_indices.append(last)
-                # if model has already been k-fold fitted, immediately add to candidate learners
-                if i in self.sampled_indices:
-                    assert self.sampled_models[i] is not None
-                    self.ensemble.candidate_learners.append(self.sampled_models[i])
-        # candidate learners that need to be k-fold fitted
-        to_fit = list(set(candidate_indices) - self.sampled_indices)
+            # k-fold fit candidate learners of ensemble
+            remaining = (runtime_limit - (time.time()-start)) * self.n_cores
+            # add best sampled model to list of candidate learners to avoid empty lists
+            best_sampled_idx = list(self.sampled_indices)[int(np.argmin(self.new_row[:, list(self.sampled_indices)]))]
+            assert self.sampled_models[best_sampled_idx] is not None
+            candidate_indices = [best_sampled_idx]
+            self.ensemble.candidate_learners.append(self.sampled_models[best_sampled_idx])
+            for i in np.argsort(self.new_row[0]):
+                if t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining:
+                    last = candidate_indices.pop()
+                    assert last == best_sampled_idx
+                    candidate_indices.append(i)
+                    candidate_indices.append(last)
+                    # if model has already been k-fold fitted, immediately add to candidate learners
+                    if i in self.sampled_indices:
+                        assert self.sampled_models[i] is not None
+                        self.ensemble.candidate_learners.append(self.sampled_models[i])
+            # candidate learners that need to be k-fold fitted
+            to_fit = list(set(candidate_indices) - self.sampled_indices)
+        else:
+            remaining = (runtime_limit - (time.time()-start)) * self.n_cores
+            to_fit = to_sample.copy()
+            
+        print(len(to_fit))
+        
         p2 = mp.Pool(self.n_cores)
         candidate_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                   self.column_headings[i]['hyperparameters'], self.verbose, i) for i in to_fit]
@@ -237,7 +245,6 @@ class AutoLearner:
             
     def fit(self, x_train, y_train, verbose=False):
 
-
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
         t_predicted = convex_opt.predict_runtime(x_train.shape)
 
@@ -266,7 +273,6 @@ class AutoLearner:
             while time.time() - start < self.runtime_limit - t:
                 if verbose:
                     print('Fitting with k={}, t={}'.format(k, t))
-                t0 = time.time()
                 if self.build_ensemble:
                     self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
                 else:

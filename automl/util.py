@@ -57,16 +57,56 @@ def extract_columns(df, algorithms=None, hyperparameters=None):
     
     Args:
         error_matrix (DataFrame):    The error matrix to be extracted.
-        algorithms (list):           A list of algorithms as search space.
+        algorithms (string or list): One or a list of algorithms as search space.
         
     Args to be implemented:
         hyperparameters (list):      A list of hyperparameters as search space.
+        
+    Returns:
+        DataFrame:                   A DataFrame consisting of corresponding columns.
     """
+    assert algorithms is not None or hyperparameters is not None, \
+    "At least one of the 'algorithms' and 'hyperparameters' need to be specified!"
     sampled_columns = []
     for item in list(df):
-        if eval(item)['algorithm'] in algorithms:
+        to_sample_this_column = False
+        if algorithms is None:
+            to_sample_this_column = True
+        elif eval(item)['algorithm'] in algorithms:
+            if hyperparameters is None:
+                to_sample_this_column = True
+            else:
+                to_sample_this_column = True
+                hyperparameter_column = eval(item)['algorithm']
+                hyperparameter_allowed = hyperparameters[eval(item)['algorithm']]
+                for key in hyperparameter_column:
+                    if not key in hyperparameter_allowed.keys():
+                        continue
+                    else:
+                        if hyperparameter_column[key] in hyperparameter_allowed[key]:
+                            continue
+                        else:
+                            to_sample_this_column = False
+                            break        
+        if to_sample_this_column == True:
             sampled_columns.append(item)
     return df[sampled_columns]
+
+def extract_column_names(df, algorithms=None, hyperparameters=None):
+    """
+    Extract names of certain columns of the error matrix.
+    
+    Args:
+        error_matrix (DataFrame):    The error matrix to be extracted.
+        algorithms (string or list): One or a list of algorithms as search space.
+        
+    Args to be implemented:
+        hyperparameters (list):      A list of hyperparameters as search space.
+        
+    Returns:
+        list:                        A list of column names.
+    """
+    return list(extract_columns(df, algorithms=algorithms, hyperparameters=hyperparameters))
 
 def error(y_true, y_predicted, p_type):
     """Compute error metric for the model; varies based on classification/regression and algorithm type.
