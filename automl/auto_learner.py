@@ -116,7 +116,7 @@ class AutoLearner:
         # set to defaults if not provided
         rank = rank or linalg.approx_rank(self.error_matrix, threshold=0.01)
         runtime_limit = runtime_limit or self.runtime_limit
-
+        
         if self.verbose:
             print('Fitting AutoLearner with max. runtime {}s'.format(runtime_limit))
         t_predicted = convex_opt.predict_runtime(x_train.shape, runtime_matrix=self.runtime_matrix)
@@ -139,29 +139,30 @@ class AutoLearner:
             to_sample_candidates = np.where(t_predicted <= runtime_limit/2)[0]
             # remove algorithms that have been sampled already
             to_sample_candidates = list(set(to_sample_candidates) - self.sampled_indices)
-            print("to_sample_candidates:{}".format(to_sample_candidates))
             # if the remaining time is not sufficient for random sampling
             if len(to_sample_candidates) == 0:
                 to_sample = np.array([np.argmin(t_predicted)])
             else:
-                print("sufficient remaining time!")
-                print("n_cores:{}".format(self.n_cores))
                 to_sample = np.random.choice(to_sample_candidates, min(self.n_cores, len(to_sample_candidates)), replace=False)
-            print("to_sample:{}".format(to_sample))
         else:
             to_sample = np.arange(0, self.new_row.shape[1])
-
+        
         if len(to_sample) == 0 and len(self.sampled_indices) == 0:
             # if no columns are selected in first iteration (log det instability), sample n fastest columns
             n = len(np.where(np.cumsum(np.sort(t_predicted)) <= runtime_limit/4)[0])
-            to_sample = np.argsort(t_predicted)[:n]
+            if n > 0:
+                to_sample = np.argsort(t_predicted)[:n]
+            else:
+                self.ensemble.fitted = False
+                return
             
         start = time.time()        
         if self.selection_method is not 'random':            
             # only need to compute column entry if it has not been computed already
             to_sample = list(set(to_sample) - self.sampled_indices)
             if self.verbose:
-                print('Sampling {} entries of new row...'.format(len(to_sample)))            
+                print('Sampling {} entries of new row...'.format(len(to_sample)))
+                  
             p1 = mp.Pool(self.n_cores)
             sample_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                    self.column_headings[i]['hyperparameters'], self.verbose, i) for i in to_sample]
@@ -207,9 +208,7 @@ class AutoLearner:
         else:
             remaining = (runtime_limit - (time.time()-start)) * self.n_cores
             to_fit = to_sample.copy()
-            
-        print(len(to_fit))
-        
+
         p2 = mp.Pool(self.n_cores)
         candidate_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                   self.column_headings[i]['hyperparameters'], self.verbose, i) for i in to_fit]
@@ -278,7 +277,8 @@ class AutoLearner:
                 else:
                     self.ensemble = Model_collection(self.p_type)
                 self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
-                if self.build_ensemble:
+                if self.build_ensemble and self.ensemble.fitted:
+                    print("got a new ensemble")
                     loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 
                     # TEMPORARY: Record intermediate results
@@ -294,11 +294,12 @@ class AutoLearner:
                         self.best = counter
                     else:
                         ranks.append(k)
-
-                    times.append(2*t)
-                    k = ranks[-1]
-                    t = times[-1]
+                    
                     counter += 1
+
+                times.append(2*t)
+                k = ranks[-1]
+                t = times[-1]
                 
         class TimeoutException(Exception): pass
 
@@ -362,56 +363,3 @@ class AutoLearner:
         """
         return self.ensemble.get_model_accuracy(y_test)
 
-    
-#     def fit_doubling(self, x_train, y_train, verbose=False):
-#         """Fit an AutoLearner object, iteratively doubling allowed runtime."""
-#         t_predicted = convex_opt.predict_runtime(x_train.shape)
-#         # split data into training and validation sets
-#         try:
-#             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
-#         except ValueError:
-#             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
-
-#         ranks = [linalg.approx_rank(self.error_matrix, threshold=0.05)]
-#         t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
-#         t_init = max(1, t_init)
-#         times = [t_init]
-#         losses = [0.5]
-
-#         e_hat, actual_times, sampled, ensembles = [], [], [], []
-#         k, t = ranks[0], times[0]
-
-#         start = time.time()
-#         counter, self.best = 0, 0
-#         while time.time() - start < self.runtime_limit - t:
-#             if verbose:
-#                 print('Fitting with k={}, t={}'.format(k, t))
-#             t0 = time.time()
-#             self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
-#             self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
-#             loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
-
-#             # TEMPORARY: Record intermediate results
-#             e_hat.append(np.copy(self.new_row))
-#             actual_times.append(time.time() - start)
-#             sampled.append(self.sampled_indices)
-#             ensembles.append(self.ensemble)
-#             losses.append(loss)
-
-#             if loss == min(losses):
-#                 ranks.append(k+1)
-#                 self.best = counter
-#             else:
-#                 ranks.append(k)
-         
-#             times.append(2*t)
-#             k = ranks[-1]
-#             t = times[-1]
-#             counter += 1
-
-#         # after all iterations, restore best model
-#         self.new_row = e_hat[self.best]
-#         self.ensemble = ensembles[self.best]
-#         return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
-#                 'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
-#                 'models': ensembles}
