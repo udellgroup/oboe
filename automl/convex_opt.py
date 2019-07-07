@@ -13,6 +13,7 @@ from cvxpy import *
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
 
 
 def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
@@ -63,7 +64,7 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
                          constraints=constraints)
         return v_opt.x
 
-def predict_runtime(size, runtime_matrix=None, saved_model=None, save=False):
+def predict_runtime(size, runtime_matrix=None, saved_model=None, model_name='LinearRegression', save=False):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
@@ -94,7 +95,7 @@ def predict_runtime(size, runtime_matrix=None, saved_model=None, save=False):
         runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
     runtimes_index = np.array(runtime_matrix.index)
     runtimes = runtime_matrix.values
-    model = RuntimePredictor(3, sizes, sizes_index, np.log(runtimes), runtimes_index)
+    model = RuntimePredictor(3, sizes, sizes_index, np.log(runtimes), runtimes_index, model_name=model_name)
     if save:
         with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
             pickle.dump(model, file)
@@ -109,11 +110,12 @@ class RuntimePredictor:
     Attributes:
         degree (int):   degree of polynomial basis function
         n_models (int): number of model settings
-        models (list):  list of scikit-learn LinearRegression models
+        models (list):  list of scikit-learn regression models
     """
-    def __init__(self, degree, sizes, sizes_index, runtimes, runtimes_index):
+    def __init__(self, degree, sizes, sizes_index, runtimes, runtimes_index, model_name='LinearRegression'):
         self.degree = degree
         self.n_models = runtimes.shape[1]
+        self.model_name = model_name
         self.models = [None] * self.n_models
         self.fit(sizes, sizes_index, runtimes, runtimes_index)
 
@@ -138,7 +140,20 @@ class RuntimePredictor:
         # train independent regression model to predict each runtime of each model setting
         for i in range(self.n_models):
             runtime = runtimes[:, i]
-            self.models[i] = LinearRegression().fit(sizes_train_poly, runtime)
+            if self.model_name == 'LinearRegression':
+                self.models[i] = LinearRegression().fit(sizes_train_poly, runtime)
+            elif self.model_name == 'KNeighborsRegressor':
+                def metric(a, b):
+                    coefficients = [1, 100]
+                    return np.sum(np.multiply((a - b) ** 2, coefficients))
+                        
+                def weights(distances):
+                    return distances
+
+                neigh = KNeighborsRegressor(n_neighbors=5, metric=metric, weights=weights)
+                self.models[i] = neigh.fit(sizes_train, runtime)
+#            print(self.models[i].coef_)
+#            print(self.models[i].intercept_)
             # self.models[i] = Lasso().fit(sizes_train_poly, runtime)
 
     def predict(self, size):
@@ -149,9 +164,25 @@ class RuntimePredictor:
         Returns:
             predictions (np.array): The predicted runtime.
         """
-        size_test = np.append(size, np.log(size[0]))
-        size_test_poly = PolynomialFeatures(self.degree).fit_transform([size_test])
-        predictions = np.zeros(self.n_models)
-        for i in range(self.n_models):
-            predictions[i] = self.models[i].predict(size_test_poly)[0]
+        if self.model_name == 'LinearRegression':
+            size_test = np.append(size, np.log(size[0]))
+            size_test_poly = PolynomialFeatures(self.degree).fit_transform([size_test])
+            predictions = np.zeros(self.n_models)
+            for i in range(self.n_models):
+                predictions[i] = self.models[i].predict(size_test_poly)[0]
+    
+        elif self.model_name == 'KNeighborsRegressor':
+            predictions = np.zeros(self.n_models)
+            for i in range(self.n_models):
+                predictions[i] = self.models[i].predict(np.array(size).reshape(1, -1))[0]
+        
+#        # TO BE REMOVED: sanity check
+#
+#        size_check = (1000, 10)
+#        size_check = np.append(size, np.log(size[0]))
+#        size_check_poly = PolynomialFeatures(self.degree).fit_transform([size_check])
+#        print(size_check_poly)
+#        for i in range(self.n_models):
+#            print(self.models[i].predict(size_check_poly)[0])
+
         return predictions

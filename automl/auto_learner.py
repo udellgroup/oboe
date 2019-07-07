@@ -37,6 +37,7 @@ class AutoLearner:
         error_matrix (DataFrame):      Error matrix to use for imputation; includes index and headers.
         runtime_matrix (DataFrame):    Runtime matrix to use for runtime prediction; includes index and headers.
         new_row (np.ndarray):          Predicted row of error matrix.
+        runtime_predictor (str):       Model for runtime prediction. One of {'LinearRegression', 'KNeighborsRegressor'}.
         solver (str):                  The convex solver for classic experiment design problem. One of {'scipy', 'cvxpy'}.
         ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking'}.
         
@@ -53,7 +54,7 @@ class AutoLearner:
                  n_cores=mp.cpu_count(), runtime_limit=512,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None, new_row=None,
-                 build_ensemble=True, ensemble_method='greedy', solver='scipy',
+                 build_ensemble=True, ensemble_method='greedy', runtime_predictor='LinearRegression', solver='scipy',
                  **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
@@ -100,6 +101,9 @@ class AutoLearner:
             self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
         else:
             self.ensemble = Model_collection(self.p_type)
+        
+        # runtime predictor
+        self.runtime_predictor = runtime_predictor
         
         # convex solver
         self.solver = solver
@@ -245,7 +249,8 @@ class AutoLearner:
     def fit(self, x_train, y_train, verbose=False):
 
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
-        t_predicted = convex_opt.predict_runtime(x_train.shape)
+        
+        t_predicted = convex_opt.predict_runtime(x_train.shape, model_name=self.runtime_predictor)
 
         # split data into training and validation sets
         try:
