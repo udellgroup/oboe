@@ -349,12 +349,16 @@ class AutoLearner:
 
         if self.build_ensemble:
             # after all iterations, restore best model
-            self.new_row = e_hat[self.best]
-            self.ensemble = ensembles[self.best]
+            
+            try:
+                self.new_row = e_hat[self.best]
+                self.ensemble = ensembles[self.best]
 
-            return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
-                'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
-                'models': ensembles}
+                return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
+                    'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
+                    'models': ensembles}
+            except IndexError:
+                print("No ensemble built within time limit. Please try increasing the time limit or allocate more computational resources.")
         else:
             return
 
