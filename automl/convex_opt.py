@@ -9,14 +9,13 @@ import pandas as pd
 import pickle
 import openml
 import subprocess
-from cvxpy import *
 from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 
 
-def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
+def solve(t_predicted, t_max, n_cores, Y, scalarization='D'):
     """Solve the following optimization problem:
     minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
     The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
@@ -27,42 +26,30 @@ def solve(t_predicted, t_max, n_cores, Y, scalarization='D', solver='scipy'):
          n_cores (int):            number of cores to use
          Y (np.ndarray):           matrix representing latent variable weights of error matrix
          scalarization (str):      scalarization method in experimental design.
-         solver (str):             solver to use. either 'cvxpy' or 'scipy'
     Returns:
         np.ndarray:                optimal vector v (not truncated to binary values)
     """
-    assert solver in {'cvxpy', 'scipy'}, "Solver {} not supported. Selected either 'scipy' or 'cvxpy'".format(solver)
+
     n = len(t_predicted)
 
-    if solver == 'cvxpy':
-        v = Variable(n)
-        objective = Minimize(-log_det(sum([v[i]*np.outer(Y[:, i], Y[:, i]) for i in range(n)])))
-        constraints = [0 <= v, v <= 1]
-        constraints += [t_predicted * v <= t_max * n_cores]
-        prob = Problem(objective, constraints)
-        result = prob.solve()
-        v_sol = np.array(v.value).T[0]
-        return v_sol
+    if scalarization == 'D':
+        def objective(v):
+            sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
+            return -1 * sign * log_det
+    elif scalarization == 'A':
+        def objective(v):
+            return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
+    elif scalarization == 'E':
+        def objective(v):
+            return np.linalg.norm(np.linalg.pinv(Y @ np.diag(v) @ Y.T), ord=2)
+    def constraint(v):
+        return t_max * n_cores- t_predicted @ v
+    v0 = np.full((n, ), 0.5)
+    constraints = {'type': 'ineq', 'fun': constraint}
+    v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, options={'maxiter': 30},
+                     constraints=constraints)
     
-    # It is observed the scipy.optimize solver in this problem usually converges within 50 iterations. Thus a maximum of 50 step is set as limit.
-    elif solver == 'scipy':
-        if scalarization == 'D':
-            def objective(v):
-                sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
-                return -1 * sign * log_det
-        elif scalarization == 'A':
-            def objective(v):
-                return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
-        elif scalarization == 'E':
-            def objective(v):
-                return np.linalg.norm(np.linalg.pinv(Y @ np.diag(v) @ Y.T), ord=2)
-        def constraint(v):
-            return t_max * n_cores- t_predicted @ v
-        v0 = np.full((n, ), 0.5)
-        constraints = {'type': 'ineq', 'fun': constraint}
-        v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, options={'maxiter': 50},
-                         constraints=constraints)
-        return v_opt.x
+    return v_opt.x
 
 def predict_runtime(size, runtime_matrix=None, saved_model=None, model_name='LinearRegression', save=False):
     """Predict the runtime for each model setting on a dataset with given shape.

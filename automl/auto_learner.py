@@ -32,13 +32,13 @@ class AutoLearner:
         verbose (bool):                Whether or not to generate print statements that showcase the progress.
         n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
         runtime_limit(int):            Maximum training time for AutoLearner, in seconds.
+        dataset_ratio_threshold(float):The threshold of dataset ratio for dataset subsampling, if the training set is tall and skinny.
         selection_method (str):        Method of selecting entries of new row to sample.
         scalarization (str):           Scalarization of the covariance matrix for mininum variance selection. One of {'D', 'A', 'E'}.
         error_matrix (DataFrame):      Error matrix to use for imputation; includes index and headers.
         runtime_matrix (DataFrame):    Runtime matrix to use for runtime prediction; includes index and headers.
         new_row (np.ndarray):          Predicted row of error matrix.
         runtime_predictor (str):       Model for runtime prediction. One of {'LinearRegression', 'KNeighborsRegressor'}.
-        solver (str):                  The convex solver for classic experiment design problem. One of {'scipy', 'cvxpy'}.
         ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking'}.
         
     Attributes to be added in the future:
@@ -51,10 +51,10 @@ class AutoLearner:
 
     def __init__(self,
                  p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
-                 n_cores=mp.cpu_count(), runtime_limit=512,
+                 n_cores=mp.cpu_count(), runtime_limit=512, dataset_ratio_threshold=100,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None, new_row=None,
-                 build_ensemble=True, ensemble_method='greedy', runtime_predictor='LinearRegression', solver='scipy',
+                 build_ensemble=True, ensemble_method='greedy', runtime_predictor='KNeighborsRegressor', solver='scipy',
                  **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
@@ -104,9 +104,8 @@ class AutoLearner:
         
         # runtime predictor
         self.runtime_predictor = runtime_predictor
-        
-        # convex solver
-        self.solver = solver
+
+        self.dataset_ratio_threshold = dataset_ratio_threshold
 
     def _fit(self, x_train, y_train, rank=None, runtime_limit=None):
         """This is a single round of the doubling process. It fits an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the new dataset, predict performance on the rest, then construct an optimal ensemble model.
@@ -117,6 +116,9 @@ class AutoLearner:
             rank (int):            Rank of error matrix factorization.
             runtime_limit (float): Maximum time to allocate to AutoLearner fitting.
         """
+        if self.verbose:
+            print("\nSingle round runtime target: {}".format(runtime_limit))
+        
         # set to defaults if not provided
         rank = rank or linalg.approx_rank(self.error_matrix, threshold=0.01)
         runtime_limit = runtime_limit or self.runtime_limit
@@ -132,7 +134,7 @@ class AutoLearner:
             valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
             Y = self.Y[:rank, valid]
             # TODO: check if Y is rank-deficient, i.e. will ED problem fail?
-            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization, self.solver)
+            v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization)
             to_sample = valid[np.where(v_opt > 0.9)[0]]
             if np.isnan(to_sample).any():
                 to_sample = np.argsort(t_predicted)[:rank]
@@ -252,7 +254,9 @@ class AutoLearner:
         
         num_points, num_features = x_train.shape
         
-        # subsample the dataset if it is tall and skinny, in which case runtime predictors have poor empirical extrapolation performance
+        if self.verbose:
+            print('\nShape of training dataset: {} data points, {} features'.format(num_points, num_features))
+        
         if num_points > 10000 and num_points / num_features > self.dataset_ratio_threshold:
             num_points_new = int(min(5000, num_features * self.dataset_ratio_threshold))
             sampling_ratio = num_points_new / num_points
@@ -262,6 +266,8 @@ class AutoLearner:
             df_resampled = df_x_train.join(df_y_train).groupby('labels').apply(pd.DataFrame.sample, frac=sampling_ratio).reset_index(drop=True)
             x_train = df_resampled.drop(['labels'], axis=1).values
             y_train = df_resampled['labels'].values
+            if self.verbose:
+                print('\nTraining dataset resampled \nShape of resampled training dataset: {} data points, {} features'.format(x_train.shape[0], x_train.shape[1]))
         
         t_predicted = convex_opt.predict_runtime(x_train.shape, model_name=self.runtime_predictor)
 
@@ -296,7 +302,8 @@ class AutoLearner:
                     self.ensemble = Model_collection(self.p_type)
                 self._fit(x_tr, y_tr, rank=k, runtime_limit=t)
                 if self.build_ensemble and self.ensemble.fitted:
-                    print("got a new ensemble")
+                    if self.verbose:
+                        print("\nGot a new ensemble in the round with rumtime target {} seconds".format(t))
                     loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 
                     # TEMPORARY: Record intermediate results
@@ -333,7 +340,8 @@ class AutoLearner:
                 signal.alarm(0)
 
         try:
-            with time_limit(self.runtime_limit):
+            # set aside 3 seconds for initial and final processing steps
+            with time_limit(self.runtime_limit - 3):
                 doubling()
         except TimeoutException as e:
             if verbose:
