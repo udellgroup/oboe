@@ -250,6 +250,19 @@ class AutoLearner:
 
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
         
+        num_points, num_features = x_train.shape
+        
+        # subsample the dataset if it is tall and skinny, in which case runtime predictors have poor empirical extrapolation performance
+        if num_points > 10000 and num_points / num_features > self.dataset_ratio_threshold:
+            num_points_new = int(min(5000, num_features * self.dataset_ratio_threshold))
+            sampling_ratio = num_points_new / num_points
+            print(sampling_ratio)
+            df_x_train = pd.DataFrame(x_train)
+            df_y_train = pd.DataFrame(y_train, columns=['labels'])
+            df_resampled = df_x_train.join(df_y_train).groupby('labels').apply(pd.DataFrame.sample, frac=sampling_ratio).reset_index(drop=True)
+            x_train = df_resampled.drop(['labels'], axis=1).values
+            y_train = df_resampled['labels'].values
+        
         t_predicted = convex_opt.predict_runtime(x_train.shape, model_name=self.runtime_predictor)
 
         # split data into training and validation sets
