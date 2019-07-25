@@ -32,7 +32,7 @@ class AutoLearner:
         verbose (bool):                Whether or not to generate print statements that showcase the progress.
         n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
         runtime_limit(int):            Maximum training time for AutoLearner, in seconds.
-        dataset_ratio_threshold(float):The threshold of dataset ratio for dataset subsampling, if the training set is tall and skinny.
+        dataset_ratio_threshold(float):The threshold of dataset ratio for dataset subsampling, if the training set is tall and skinny (number of data points much larger than number of features).
         selection_method (str):        Method of selecting entries of new row to sample.
         scalarization (str):           Scalarization of the covariance matrix for mininum variance selection. One of {'D', 'A', 'E'}.
         error_matrix (DataFrame):      Error matrix to use for imputation; includes index and headers.
@@ -54,7 +54,7 @@ class AutoLearner:
                  n_cores=mp.cpu_count(), runtime_limit=512, dataset_ratio_threshold=100,
                  selection_method='min_variance', scalarization='D',
                  error_matrix=None, runtime_matrix=None, new_row=None,
-                 build_ensemble=True, ensemble_method='greedy', runtime_predictor='KNeighborsRegressor', solver='scipy',
+                 build_ensemble=True, ensemble_method='greedy', runtime_predictor='LinearRegression',
                  **stacking_hyperparams):
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
