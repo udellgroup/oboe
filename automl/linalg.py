@@ -52,14 +52,25 @@ def pca(a, rank=None, threshold=None):
     assert (threshold is None) != (rank is None), "Exactly one of threshold and rank should be specified."
     if threshold is not None:
         rank = approx_rank(a, threshold)
-    std = np.std(a, axis=0)
+    # std = np.std(a, axis=0)
     u, s, vt = svds(a, k=rank)
+
+    nonzero_pos = np.where(s > 0)[0]
+    s = s[nonzero_pos]
+    u = u[:, nonzero_pos]
+    vt = vt[nonzero_pos, :]
+
     u = np.fliplr(u)
     s = np.flipud(s)
     vt = np.flipud(vt)
-    sigma_sqrt = np.diag(np.sqrt(s))
-    x = np.dot(u, sigma_sqrt).T
-    y = np.dot(np.dot(sigma_sqrt, vt), np.diag(std))
+    # sigma_sqrt = np.diag(np.sqrt(s))
+    # x = np.dot(u, sigma_sqrt).T
+    # # y = np.dot(np.dot(sigma_sqrt, vt), np.diag(std))
+    # y = np.dot(sigma_sqrt, vt)
+
+    sigma = np.diag(s)
+    x = np.dot(u, sigma).T
+    y = vt
     return x, y, vt
 
 
