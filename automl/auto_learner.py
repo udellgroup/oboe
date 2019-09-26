@@ -17,6 +17,8 @@ from sklearn.model_selection import train_test_split
 import signal
 from contextlib import contextmanager
 
+# load default error and runtime matrices
+
 DEFAULTS = pkg_resources.resource_filename(__name__, 'defaults')
 ERROR_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'error_matrix.csv'), index_col=0, header=0)
 RUNTIME_MATRIX = pd.read_csv(os.path.join(DEFAULTS, 'runtime_matrix.csv'), index_col=0, header=0)
@@ -33,7 +35,7 @@ class AutoLearner:
         n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
         runtime_limit(int):            Maximum training time for AutoLearner, in seconds.
         dataset_ratio_threshold(float):The threshold of dataset ratio for dataset subsampling, if the training set is tall and skinny (number of data points much larger than number of features).
-        selection_method (str):        Method of selecting entries of new row to sample.
+        selection_method (str):        Method of selecting entries of new row to sample. One of {'qr', 'min_variance', 'random'}.
         scalarization (str):           Scalarization of the covariance matrix for mininum variance selection. One of {'D', 'A', 'E'}.
         error_matrix (DataFrame):      Error matrix to use for imputation; includes index and headers.
         runtime_matrix (DataFrame):    Runtime matrix to use for runtime prediction; includes index and headers.
@@ -59,8 +61,10 @@ class AutoLearner:
 
         # TODO: check if arguments to constructor are valid; set to defaults if not specified
         assert selection_method in {'qr', 'min_variance', 'random'}, "The method to select entries to sample must be " \
-            "either qr (QR decomposition), min_variance (minimize variance with time constraints), or random (time-constrained random selection, for testing purpose)."
+            "either qr (QR decomposition), min_variance (minimize variance with time constraints), " \
+            "or random (time-constrained random selection, i.e., set the models that should be able to finish within time budget)."
 
+        # model configurations
         with open(os.path.join(DEFAULTS, p_type + '.json')) as file:
             defaults = json.load(file)
 
@@ -74,11 +78,11 @@ class AutoLearner:
         self.n_cores = n_cores
         self.runtime_limit = runtime_limit
 
-        # sample column selection
+        # configurations for column selection in cold-start
         self.selection_method = selection_method
         self.scalarization = scalarization
 
-        # error matrix attributes
+        # error matrix factorization
         # TODO: determine whether to generate new error matrix or use default/subset of default
         self.error_matrix = util.extract_columns(ERROR_MATRIX, self.algorithms, self.hyperparameters) if error_matrix is None else error_matrix
         self.runtime_matrix = util.extract_columns(RUNTIME_MATRIX, self.algorithms, self.hyperparameters) if runtime_matrix is None else runtime_matrix
@@ -108,7 +112,8 @@ class AutoLearner:
         self.dataset_ratio_threshold = dataset_ratio_threshold
 
     def _fit(self, x_train, y_train, rank=None, runtime_limit=None):
-        """This is a single round of the doubling process. It fits an AutoLearner object on a new dataset. This will sample the performance of several algorithms on the new dataset, predict performance on the rest, then construct an optimal ensemble model.
+        """This private method is a single round of the doubling process. It fits an AutoLearner object on a new dataset.
+        This will sample the performance of several algorithms on the new dataset, predict performance on the rest, then construct an optimal ensemble model.
 
         Args:
             x_train (np.ndarray):  Features of the training dataset.
@@ -125,15 +130,17 @@ class AutoLearner:
         
         if self.verbose:
             print('Fitting AutoLearner with max. runtime {}s'.format(runtime_limit))
+        # predict runtime for the training set of the new dataset
         t_predicted = convex_opt.predict_runtime(x_train.shape, runtime_matrix=self.runtime_matrix)
 
+        # cold-start: pick the initial set of models to fit on the new dataset
         if self.selection_method == 'qr':
             to_sample = linalg.pivot_columns(self.error_matrix)
         elif self.selection_method == 'min_variance':
             # select algorithms to sample only from subset of algorithms that will run in allocated time
             valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
             Y = self.Y[:rank, valid]
-            # TODO: check if Y is rank-deficient, i.e. will ED problem fail?
+            # TODO: check if Y is rank-deficient, i.e. will ED problem fail
             v_opt = convex_opt.solve(t_predicted[valid], runtime_limit/4, self.n_cores, Y, self.scalarization)
             to_sample = valid[np.where(v_opt > 0.9)[0]]
             if np.isnan(to_sample).any():
@@ -164,7 +171,7 @@ class AutoLearner:
             
         start = time.time()        
         if self.selection_method is not 'random':            
-            # only need to compute column entry if it has not been computed already
+            # we only need to fit models on the new dataset if it has not been fitted already
             to_sample = list(set(to_sample) - self.sampled_indices)
             if self.verbose:
                 print('Sampling {} entries of new row...'.format(len(to_sample)))
@@ -177,7 +184,7 @@ class AutoLearner:
             p1.close()
             p1.join()
 
-            # update sampled indices
+            # predict performance of models not actually fitted on the new dataset
             self.sampled_indices = self.sampled_indices.union(set(to_sample))
             for i, error in enumerate(sample_model_errors):
                 cv_error, cv_predictions = error.get()
@@ -194,17 +201,17 @@ class AutoLearner:
 
             # k-fold fit candidate learners of ensemble
             remaining = (runtime_limit - (time.time()-start)) * self.n_cores
-            # add best sampled model to list of candidate learners to avoid empty lists
+            # add models predicted to be the best to list of candidate learners to avoid empty lists
             best_sampled_idx = list(self.sampled_indices)[int(np.argmin(self.new_row[:, list(self.sampled_indices)]))]
             assert self.sampled_models[best_sampled_idx] is not None
             candidate_indices = [best_sampled_idx]
             self.ensemble.candidate_learners.append(self.sampled_models[best_sampled_idx])
             for i in np.argsort(self.new_row[0]):
                 if t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining:
-                    last = candidate_indices.pop()
-                    assert last == best_sampled_idx
                     candidate_indices.append(i)
-                    candidate_indices.append(last)
+                    # last = candidate_indices.pop()
+                    # assert last == best_sampled_idx
+                    # candidate_indices.append(last)
                     # if model has already been k-fold fitted, immediately add to candidate learners
                     if i in self.sampled_indices:
                         assert self.sampled_models[i] is not None
@@ -215,6 +222,7 @@ class AutoLearner:
             remaining = (runtime_limit - (time.time()-start)) * self.n_cores
             to_fit = to_sample.copy()
 
+        # fit models predicted to have good performance and thus going to be added to the ensemble
         p2 = mp.Pool(self.n_cores)
         candidate_models = [Model(self.p_type, self.column_headings[i]['algorithm'],
                                   self.column_headings[i]['hyperparameters'], self.verbose, i) for i in to_fit]
