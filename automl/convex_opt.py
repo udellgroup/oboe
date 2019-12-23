@@ -1,62 +1,21 @@
-"""
-Find columns of error matrix to minimize variance of predicted latent features.
-Solves convex optimization problem as described in chapter 7.5 in https://web.stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf
-"""
-
 import numpy as np
 import os
 import pandas as pd
 import pickle
+import tensorly as tl
 import openml
-import subprocess
-from scipy.optimize import minimize
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 
 
-def solve(t_predicted, t_max, n_cores, Y, scalarization='D'):
-    """Solve the following optimization problem:
-    minimize -log(det(sum_i v[i]*Y[:, i]*Y[:, i].T)) subject to 0 <= v[i] <= 1 and t_predicted.T * v <= t_max
-    The optimal vector v is an approximation of a boolean vector indicating which entries to sample.
-
-    Args:
-         t_predicted (np.ndarray): 1-d array specifying predicted runtime for each model setting
-         t_max (float):            maximum runtime of sampled model
-         n_cores (int):            number of cores to use
-         Y (np.ndarray):           matrix representing latent variable weights of error matrix
-         scalarization (str):      scalarization method in experimental design.
-    Returns:
-        np.ndarray:                optimal vector v (not truncated to binary values)
-    """
-
-    n = len(t_predicted)
-
-    if scalarization == 'D':
-        def objective(v):
-            sign, log_det = np.linalg.slogdet(Y @ np.diag(v) @ Y.T)
-            return -1 * sign * log_det
-    elif scalarization == 'A':
-        def objective(v):
-            return np.trace(np.linalg.pinv(Y @ np.diag(v) @ Y.T))
-    elif scalarization == 'E':
-        def objective(v):
-            return np.linalg.norm(np.linalg.pinv(Y @ np.diag(v) @ Y.T), ord=2)
-    def constraint(v):
-        return t_max * n_cores- t_predicted @ v
-    v0 = np.full((n, ), 0.5)
-    constraints = {'type': 'ineq', 'fun': constraint}
-    v_opt = minimize(objective, v0, method='SLSQP', bounds=[(0, 1)] * n, options={'maxiter': 30},
-                     constraints=constraints)
-    
-    return v_opt.x
-
-def predict_runtime(size, runtime_matrix=None, saved_model=None, model_name='LinearRegression', save=False):
+def predict_runtime(size, runtime_matrix=None, runtimes_index=None, saved_model=None, model_name='LinearRegression', save=False):
     """Predict the runtime for each model setting on a dataset with given shape.
 
     Args:
         size (tuple):               tuple specifying dataset size as [n_rows, n_columns]
-        runtime_matrix (DataFrame): the DataFame containing runtime.
+        runtime_tensor (np.ndarray):the numpy array containing runtime.
+        runtimes_index (list):      dataset indices of runtime tensor.
         saved_model (str):          path to pre-trained model; defaults to None
         save (bool):                whether to save pre-trained model
     Returns:
@@ -79,10 +38,16 @@ def predict_runtime(size, runtime_matrix=None, saved_model=None, model_name='Lin
         sizes_index = []
         sizes = []
     if runtime_matrix is None:
-        runtime_matrix = pd.read_csv(os.path.join(defaults_path, 'runtime_matrix.csv'), index_col=0)
-    runtimes_index = np.array(runtime_matrix.index)
-    runtimes = runtime_matrix.values
-    model = RuntimePredictor(3, sizes, sizes_index, np.log(runtimes), runtimes_index, model_name=model_name)
+        runtime_tensor = pd.read_csv(os.path.join(defaults_path, 'runtime_tensor.csv'), index_col=0)
+        runtime_matrix = tl.unfold(runtime_tensor, mode=0)
+    
+    if runtimes_index is None:
+        with open(os.path.join(defaults_path, 'configs_tensor.pkl'), 'rb') as handle:
+            configs_tensor = pickle.load(handle)
+        configs = tl.unfold(configs_tensor, mode=0)           
+        runtimes_index = [eval(configs[i, 0])['dataset'] for i in range(configs.shape[0])]
+
+    model = RuntimePredictor(3, sizes, sizes_index, np.log(runtime_matrix), runtimes_index, model_name=model_name)
     if save:
         with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
             pickle.dump(model, file)
@@ -91,14 +56,6 @@ def predict_runtime(size, runtime_matrix=None, saved_model=None, model_name='Lin
 
 
 class RuntimePredictor:
-    """Model that predicts the runtime for each model setting on a dataset with given shape. Performs polynomial
-    regression on n (# samples), p (# features), and log(n).
-
-    Attributes:
-        degree (int):   degree of polynomial basis function
-        n_models (int): number of model settings
-        models (list):  list of scikit-learn regression models
-    """
     def __init__(self, degree, sizes, sizes_index, runtimes, runtimes_index, model_name='LinearRegression'):
         self.degree = degree
         self.n_models = runtimes.shape[1]
@@ -110,9 +67,8 @@ class RuntimePredictor:
         """Fit polynomial regression on pre-recorded runtimes on datasets."""
         # assert sizes.shape[0] == runtimes.shape[0], "Dataset sizes and runtimes must be recorded on same datasets."
         for i in set(runtimes_index).difference(set(sizes_index)):
-            dataset = openml.datasets.get_dataset(i)
-            data_numeric, data_labels, categorical = dataset.get_data(target=dataset.default_target_attribute,
-                                                                      return_categorical_indicator=True)
+            dataset = openml.datasets.get_dataset(int(i))
+            data_numeric, data_labels, categorical, _ = dataset.get_data(target=dataset.default_target_attribute)
             if len(sizes) == 0:
                 sizes = np.array([data_numeric.shape])
                 sizes_index = np.array(i)
@@ -127,9 +83,15 @@ class RuntimePredictor:
         # train independent regression model to predict each runtime of each model setting
         for i in range(self.n_models):
             runtime = runtimes[:, i]
+            no_nan_indices = np.where(np.invert(np.isnan(runtime)))[0]
+            runtime_no_nan = runtime[no_nan_indices]
+            
+            
             if self.model_name == 'LinearRegression':
-                self.models[i] = LinearRegression().fit(sizes_train_poly, runtime)
+                sizes_train_poly_no_nan = sizes_train_poly[no_nan_indices]
+                self.models[i] = LinearRegression().fit(sizes_train_poly_no_nan, runtime_no_nan)
             elif self.model_name == 'KNeighborsRegressor':
+                sizes_train_no_nan = sizes_train[no_nan_indices]
                 def metric(a, b):
                     coefficients = [1, 100]
                     return np.sum(np.multiply((a - b) ** 2, coefficients))
@@ -138,7 +100,7 @@ class RuntimePredictor:
                     return distances
 
                 neigh = KNeighborsRegressor(n_neighbors=5, metric=metric, weights=weights)
-                self.models[i] = neigh.fit(sizes_train, runtime)
+                self.models[i] = neigh.fit(sizes_train_no_nan, runtime_no_nan)
 #            print(self.models[i].coef_)
 #            print(self.models[i].intercept_)
             # self.models[i] = Lasso().fit(sizes_train_poly, runtime)

@@ -16,6 +16,8 @@ import sys
 import glob
 from math import isclose
 from sklearn.metrics import mean_squared_error
+from tensorly.decomposition import tucker
+from tensorly import tucker_to_tensor
 
 # Classification algorithms
 from sklearn.neighbors import KNeighborsClassifier as KNN
@@ -44,11 +46,49 @@ with open(os.path.join(defaults_path, 'classification.json'), 'r') as f:
 with open(os.path.join(defaults_path, 'regression.json'), 'r') as f:
     REG = json.load(f)
 
-ALGORITHMS_C = dict(zip(CLS['algorithms'], list(map(lambda name: eval(name), CLS['algorithms']))))
-ALGORITHMS_R = dict(zip(REG['algorithms'], list(map(lambda name: eval(name), REG['algorithms']))))
+# ALGORITHMS_C = dict(zip(CLS['algorithms'], list(map(lambda name: eval(name), CLS['algorithms']))))
+# ALGORITHMS_R = dict(zip(REG['algorithms'], list(map(lambda name: eval(name), REG['algorithms']))))
 
-DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regression': ALGORITHMS_R},
-            'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
+# DEFAULTS = {'algorithms':       {'classification': ALGORITHMS_C,           'regression': ALGORITHMS_R},
+#             'hyperparameters': {'classification': CLS['hyperparameters'],  'regression': REG['hyperparameters']}}
+
+
+def get_omega(tensor):
+    Ω = np.ones(tensor.shape)
+    missing_index = np.where(np.isnan(tensor))
+    missing_index = list(zip(*missing_index))
+    for index in missing_index:
+        Ω[index] = 0
+    return Ω
+
+def tucker_on_error_tensor(error_tensor, ranks=[15, 4, 2, 2, 8, 15], save_results=False, verbose=False):
+    
+    tensor_pred = np.nan_to_num(error_tensor)
+    tensor_from_fac = np.zeros(error_tensor.shape)
+    errors = []
+    num_iterations = 0
+    Ω = get_omega(error_tensor)
+
+    # while(not stopping_condition(tensor, tensor_from_fac, threshold)):
+    while(len(errors) <= 2 or errors[-1] < errors[-2] - 0.01):
+        
+        num_iterations += 1
+        core, factors = tucker(tensor_pred, ranks=ranks)
+        tensor_from_fac = tucker_to_tensor((core, factors))
+        error = np.linalg.norm(np.multiply(Ω, np.nan_to_num(error_tensor - tensor_from_fac)))
+        
+        if verbose:
+            if not num_iterations % 5:
+                print("ranks: {}, iteration {}, error: {}".format(ranks, num_iterations, error))
+
+        errors.append(error)
+        tensor_pred = np.nan_to_num(error_tensor) + np.multiply(1-Ω, tensor_from_fac)
+    
+    core, factors = tucker(tensor_pred, ranks=ranks)
+    
+    if save_results:
+        np.save(os.path.join(defaults_path, 'error_tensor_imputed.npy'), tensor_pred)
+    return core, factors, tensor_pred, errors
 
 
 def extract_columns(df, algorithms=None, hyperparameters=None):
@@ -154,53 +194,53 @@ def invalid_args(func, arglist):
     return set(arglist) - set(args)
 
 
-def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
-    """Check if arguments to constructor of AutoLearner object are valid, and default error matrix can be used.
+# def check_arguments(p_type, algorithms, hyperparameters, defaults=DEFAULTS):
+#     """Check if arguments to constructor of AutoLearner object are valid, and default error matrix can be used.
 
-    Args:
-        p_type (str):           Problem type. One of {'classification', 'regression'}
-        algorithms (list):      List of selected algorithms as strings. (e.g. ['KNN', 'lSVM', 'kSVM']
-        hyperparameters (dict): Nested dict of selected hyperparameters.
-        defaults (dict):        Nested dict of default algorithms & hyperparameters.
-    Returns:
-        bool: Whether or not the default error matrix can be used.
-    """
-    # check if valid problem type
-    assert p_type.lower() in ['classification', 'regression'], "Please specify a valid type."
+#     Args:
+#         p_type (str):           Problem type. One of {'classification', 'regression'}
+#         algorithms (list):      List of selected algorithms as strings. (e.g. ['KNN', 'lSVM', 'kSVM']
+#         hyperparameters (dict): Nested dict of selected hyperparameters.
+#         defaults (dict):        Nested dict of default algorithms & hyperparameters.
+#     Returns:
+#         bool: Whether or not the default error matrix can be used.
+#     """
+#     # check if valid problem type
+#     assert p_type.lower() in ['classification', 'regression'], "Please specify a valid type."
 
-    # set selected algorithms to default set if not specified
-    all_algs = list(defaults['algorithms'][p_type].keys())
-    if algorithms is None:
-        algorithms = all_algs
+#     # set selected algorithms to default set if not specified
+#     all_algs = list(defaults['algorithms'][p_type].keys())
+#     if algorithms is None:
+#         algorithms = all_algs
 
-    # check if selected algorithms are a subset of supported algorithms for given problem type
-    assert set(algorithms).issubset(set(all_algs)), \
-        "Unsupported algorithm(s) {}.".format(set(algorithms) - set(all_algs))
+#     # check if selected algorithms are a subset of supported algorithms for given problem type
+#     assert set(algorithms).issubset(set(all_algs)), \
+#         "Unsupported algorithm(s) {}.".format(set(algorithms) - set(all_algs))
 
-    # set selected hyperparameters to default set if not specified
-    all_hyp = defaults['hyperparameters'][p_type]
-    if hyperparameters is None:
-        hyperparameters = all_hyp
+#     # set selected hyperparameters to default set if not specified
+#     all_hyp = defaults['hyperparameters'][p_type]
+#     if hyperparameters is None:
+#         hyperparameters = all_hyp
 
-    # check if selected hyperparameters are valid arguments to scikit-learn models
-    invalid = [invalid_args(defaults['algorithms'][p_type][alg], hyperparameters[alg].keys())
-               for alg in hyperparameters.keys()]
-    for i, args in enumerate(invalid):
-        assert len(args) == 0, "Unsupported hyperparameter(s) {} for algorithm {}" \
-            .format(args, list(hyperparameters.keys())[i])
+#     # check if selected hyperparameters are valid arguments to scikit-learn models
+#     invalid = [invalid_args(defaults['algorithms'][p_type][alg], hyperparameters[alg].keys())
+#                for alg in hyperparameters.keys()]
+#     for i, args in enumerate(invalid):
+#         assert len(args) == 0, "Unsupported hyperparameter(s) {} for algorithm {}" \
+#             .format(args, list(hyperparameters.keys())[i])
 
-    # check if it is necessary to generate new error matrix, i.e. are all hyperparameters in default error matrix
-    compatible_columns = []
-    new_columns = []
-    default_settings = generate_settings(defaults['algorithms'][p_type].keys(), defaults['hyperparameters'][p_type])
-    for alg in hyperparameters.keys():
-        for values in itertools.product(*hyperparameters[alg].values()):
-            setting = {'algorithm': alg, 'hyperparameters': dict(zip(hyperparameters[alg].keys(), list(values)))}
-            if setting in default_settings:
-                compatible_columns.append(setting)
-            else:
-                new_columns.append(setting)
-    return compatible_columns, new_columns
+#     # check if it is necessary to generate new error matrix, i.e. are all hyperparameters in default error matrix
+#     compatible_columns = []
+#     new_columns = []
+#     default_settings = generate_settings(defaults['algorithms'][p_type].keys(), defaults['hyperparameters'][p_type])
+#     for alg in hyperparameters.keys():
+#         for values in itertools.product(*hyperparameters[alg].values()):
+#             setting = {'algorithm': alg, 'hyperparameters': dict(zip(hyperparameters[alg].keys(), list(values)))}
+#             if setting in default_settings:
+#                 compatible_columns.append(setting)
+#             else:
+#                 new_columns.append(setting)
+#     return compatible_columns, new_columns
 
 
 def knapsack(weights, values, capacity):
