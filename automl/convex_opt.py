@@ -8,27 +8,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 
-
-def predict_runtime(size, runtime_matrix=None, runtimes_index=None, saved_model=None, model_name='LinearRegression', save=False):
-    """Predict the runtime for each model setting on a dataset with given shape.
-
-    Args:
-        size (tuple):               tuple specifying dataset size as [n_rows, n_columns]
-        runtime_tensor (np.ndarray):the numpy array containing runtime.
-        runtimes_index (list):      dataset indices of runtime tensor.
-        saved_model (str):          path to pre-trained model; defaults to None
-        save (bool):                whether to save pre-trained model
-    Returns:
-        np.ndarray:        1-d array of predicted runtimes
-    """
-    assert len(size) == 2, "Dataset must be 2-dimensional."
-    shape = np.array(size)
-
-    if saved_model:
-        with open(saved_model, 'rb') as file:
-            model = pickle.load(file)
-        return model.predict(shape)
-
+def initialize_runtime_predictor(runtime_matrix, runtimes_index, model_name='LinearRegression', save=False):
     defaults_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'defaults')
     try:
         dataset_sizes = pd.read_csv(os.path.join(defaults_path, 'dataset_sizes.csv'), index_col=0)
@@ -51,6 +31,32 @@ def predict_runtime(size, runtime_matrix=None, runtimes_index=None, saved_model=
     if save:
         with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
             pickle.dump(model, file)
+    return model   
+    
+    
+def predict_runtime(size, runtime_matrix=None, runtimes_index=None, saved_model='File', model=None, model_name='LinearRegression', save=False):
+    """Predict the runtime for each model setting on a dataset with given shape.
+
+    Args:
+        size (tuple):               tuple specifying dataset size as [n_rows, n_columns]
+        runtime_tensor (np.ndarray):the numpy array containing runtime.
+        runtimes_index (list):      dataset indices of runtime tensor.
+        saved_model (str):          path to pre-trained model; defaults to None. One of {'File', 'Class', None}.
+        model (class):              saved runtime predictor; valid only when saved_model == 'Class'.
+        save (bool):                whether to save pre-trained model
+    Returns:
+        np.ndarray:        1-d array of predicted runtimes
+    """
+    assert len(size) == 2, "Dataset must be 2-dimensional."
+    shape = np.array(size)
+
+    if saved_model == 'File':
+        with open(saved_model, 'rb') as file:
+            model = pickle.load(file)
+    elif saved_model == 'Class':
+        model = model
+    else:
+        model = initialize_runtime_predictor(runtime_matrix=runtime_matrix, runtimes_index=runtimes_index, model_name=model_name, save=save)
 
     return np.exp(model.predict(shape))
 

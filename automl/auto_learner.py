@@ -42,7 +42,8 @@ class AutoLearner:
         runtime_limit (int):           Maximum training time for AutoLearner, in seconds.
         dataset_ratio_threshold(float):The threshold of dataset ratio for dataset subsampling, if the training set is tall and skinny (number of data points much larger than number of features).
         new_row (np.ndarray):          Predicted row of error matrix.
-        runtime_predictor (str):       Model for runtime prediction. One of {'LinearRegression', 'KNeighborsRegressor'}.
+        runtime_predictor_algorithm (str):       
+                                       Model for runtime prediction. One of {'LinearRegression', 'KNeighborsRegressor'}.
         ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking'}.
         
     Attributes to be added in the future:
@@ -56,7 +57,7 @@ class AutoLearner:
     def __init__(self,
                  p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=mp.cpu_count(), n_folds=3, runtime_limit=512, dataset_ratio_threshold=100,
-                 new_row=None, load_imputed=True, selection_method='ED', build_ensemble=True, ensemble_method='greedy', runtime_predictor='LinearRegression',
+                 new_row=None, load_imputed=True, selection_method='ED', build_ensemble=True, ensemble_method='greedy', runtime_predictor_algorithm='LinearRegression',
                  **stacking_hyperparams):
         
         self.verbose = verbose
@@ -121,7 +122,7 @@ class AutoLearner:
                 r[key] = eval(item[key])            
             self.pipeline_settings.append(r)        
 
-#         # sampled & fitted models
+         # sampled & fitted models
         self.new_row = new_row or np.full((1, len(pipelines)), np.nan)
         self.new_row_pred = new_row or np.full((1, len(pipelines)), np.nan)
         self.sampled_indices = set()
@@ -139,7 +140,8 @@ class AutoLearner:
             self.ensemble = Model_collection(self.p_type)
         
         # runtime predictor
-        self.runtime_predictor = runtime_predictor
+        self.runtime_predictor_algorithm = runtime_predictor_algorithm
+        self.runtime_predictor = convex_opt.initialize_runtime_predictor(runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm)
         self.dataset_ratio_threshold = dataset_ratio_threshold
 
     def _fit(self, x_train, y_train, t_predicted, ranks=None, runtime_limit=None):
@@ -169,9 +171,12 @@ class AutoLearner:
 #             to_sample = linalg.pivot_columns(self.error_matrix)
 #         if self.selection_method == 'min_variance':
             # select algorithms to sample only from subset of algorithms that will run in allocated time
-        valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
+        valid = np.where(t_predicted <= self.n_cores * runtime_limit/4)[0]
         Y = self.Y[:ranks[0], valid]
         
+        if self.verbose:
+            print("Selecting an initial set of models to evaluate ...")
+            
         selected_columns_qr, t_sum, case = ED.pivot_columns_time(Y, t_predicted[valid], runtime_limit/2, 
                                                         columns_to_avoid=None,
                                                         rank=Y.shape[0])
@@ -185,7 +190,7 @@ class AutoLearner:
                                                         t=t_predicted[valid],
                                                         initialization=selected_columns_qr,
                                                         t_elapsed=t_sum,
-                                                        t_max=runtime_limit/2,
+                                                        t_max=runtime_limit/4,
                                                         idx_to_exclude=None)
         # TODO: check if Y is rank-deficient, i.e. will ED problem fail
 
@@ -270,7 +275,7 @@ class AutoLearner:
                         # if model has already been k-fold fitted, immediately add to candidate learners
                         if i in self.sampled_indices:
                             assert self.sampled_pipelines[i] is not None
-                            self.ensemble.candidate_learners.append(self.sampled_models[i])
+                            self.ensemble.candidate_learners.append(self.sampled_pipelines[i])
                 # candidate learners that need to be k-fold fitted
                 to_fit = list(set(candidate_indices) - self.sampled_indices)
                 print("to fit: {}".format(to_fit))
@@ -354,9 +359,16 @@ class AutoLearner:
             self.pipeline_settings_on_dataset.append(item_copy)
         
         
-        # predict runtime for the training set of the new dataset.
-        t_predicted = convex_opt.predict_runtime(x_train.shape, runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index)
+        start = time.time()
+        
+        if self.verbose:
+            print("Predicting pipeline running time ..")
 
+        # predict runtime for the training set of the new dataset.
+        t_predicted = convex_opt.predict_runtime(x_train.shape, saved_model='Class', model=self.runtime_predictor)
+        
+        if self.verbose:
+            print("Splitting training set into training and validation ..")
         # split data into training and validation sets
         try:
             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
@@ -365,23 +377,23 @@ class AutoLearner:
 
         ranks = [linalg.approx_tensor_rank(self.error_tensor_imputed, threshold=0.05)]
         if self.build_ensemble:
-            t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(2*ranks[0][-1])].sum()))
+            t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(5*ranks[0][-1])].sum()))
             t_init = max(1, t_init)
         else:
             t_init = self.runtime_limit / 2
         times = [t_init]
         losses = [0.5]
 
-        e_hat, actual_times, sampled, ensembles = [], [], [], []        
-
-        start = time.time()
+        e_hat, actual_times, sampled, ensembles = [], [], [], []
         
+        if self.verbose:
+            print("Doubling process started ...")
         def doubling():
             k, t = ranks[0], times[0]
             counter, self.best = 0, 0            
             while time.time() - start < self.runtime_limit - t:
                 if verbose:
-                    print('Fitting with k={}, t={}'.format(k, t))
+                    print('Fitting with ranks={}, t={}'.format(k, t))
                 if self.build_ensemble:
                     self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
                 else:
