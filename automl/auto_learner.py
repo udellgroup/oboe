@@ -246,7 +246,8 @@ class AutoLearner:
             self.new_row_pred = linalg.impute_with_coefficients(self.Y[:ranks[0], :], self.new_row, list(self.sampled_indices))
             
             for idx in np.argsort(self.new_row[0, :])[:5]: # automatically put nans at the end of the list
-                print(self.sampled_pipelines[idx])
+                if self.verbose:
+                    print(self.sampled_pipelines[idx])
                 self.ensemble.candidate_learners.append(self.sampled_pipelines[idx])
 
             # impute ALL entries
@@ -258,8 +259,8 @@ class AutoLearner:
             
             if remaining > 0:
             # add models predicted to be the best to list of candidate learners to avoid empty lists
-            
-                print("length of sampled indices: {}".format(len(self.sampled_indices)))
+                if self.verbose:            
+                    print("length of sampled indices: {}".format(len(self.sampled_indices)))
 
     #             best_sampled_idx = list(self.sampled_indices)[int(np.argmin(self.new_row[:, list(self.sampled_indices)]))]
     #             assert self.sampled_pipelines[best_sampled_idx] is not None
@@ -278,7 +279,8 @@ class AutoLearner:
                             self.ensemble.candidate_learners.append(self.sampled_pipelines[i])
                 # candidate learners that need to be k-fold fitted
                 to_fit = list(set(candidate_indices) - self.sampled_indices)
-                print("to fit: {}".format(to_fit))
+                if self.verbose:
+                    print("candidate learners that need to be k-fold fitted: {}".format(to_fit))
         else:
             remaining = (runtime_limit - (time.time()-start)) * self.n_cores
             to_fit = to_sample.copy()
@@ -333,7 +335,8 @@ class AutoLearner:
         if num_points > 10000 and num_points / num_features > self.dataset_ratio_threshold:
             num_points_new = int(min(5000, num_features * self.dataset_ratio_threshold))
             sampling_ratio = num_points_new / num_points
-            print(sampling_ratio)
+            if self.verbose:
+                print("dataset too skewed; sampling data points with sampling ratio {}".format(sampling_ratio))
             df_x_train = pd.DataFrame(x_train)
             df_y_train = pd.DataFrame(y_train, columns=['labels'])
             df_resampled = df_x_train.join(df_y_train).groupby('labels').apply(pd.DataFrame.sample, frac=sampling_ratio).reset_index(drop=True)
@@ -401,7 +404,7 @@ class AutoLearner:
                 self._fit(x_tr, y_tr, t_predicted, ranks=k, runtime_limit=t)
                 if self.build_ensemble and self.ensemble.fitted:
                     if self.verbose:
-                        print("\nGot a new ensemble in the round with rumtime target {} seconds".format(t))
+                        print("\nGot a new ensemble in the round with runtime target {} seconds".format(t))
                     loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
 
                     # TEMPORARY: Record intermediate results
