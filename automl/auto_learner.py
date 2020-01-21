@@ -16,6 +16,7 @@ import experiment_design as ED
 from sklearn.model_selection import train_test_split
 import tensorly as tl
 import signal
+from scipy.stats import mode
 from contextlib import contextmanager
 
 # load default error and runtime tensors
@@ -44,7 +45,7 @@ class AutoLearner:
         new_row (np.ndarray):          Predicted row of error matrix.
         runtime_predictor_algorithm (str):       
                                        Model for runtime prediction. One of {'LinearRegression', 'KNeighborsRegressor'}.
-        ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking'}.
+        ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking', 'best_several'}.
         
     Attributes to be added in the future:
         X, Y (np.ndarray):             PCA decomposition of error matrix.
@@ -56,8 +57,8 @@ class AutoLearner:
 
     def __init__(self,
                  p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
-                 n_cores=mp.cpu_count(), n_folds=3, runtime_limit=512, dataset_ratio_threshold=100,
-                 new_row=None, load_imputed=True, selection_method='ED', build_ensemble=True, ensemble_method='greedy', runtime_predictor_algorithm='LinearRegression',
+                 n_cores=1, n_folds=3, runtime_limit=512, dataset_ratio_threshold=100,
+                 new_row=None, load_imputed=True, save_imputed=True, selection_method='ED', build_ensemble=True, ensemble_method='best_several', runtime_predictor_algorithm='LinearRegression',
                  **stacking_hyperparams):
         
         self.verbose = verbose
@@ -72,12 +73,14 @@ class AutoLearner:
         self.hyperparameters = hyperparameters or defaults['estimator']['hyperparameters']
         
         # computational considerations
+        if n_cores is None:
+            n_cores = mp.cpu_count()
         self.n_cores = n_cores
         self.runtime_limit = runtime_limit
         self.n_folds = n_folds
         
         # error tensor completion
-        ranks_for_imputation = (20, 4, 2, 2, 8, 20)
+        ranks_for_imputation = (20, 4, 2, 8, 20)
         if load_imputed:            
             try:
                 error_tensor_imputed = np.load(os.path.join(DEFAULTS, 'error_tensor_imputed.npy'))
@@ -86,6 +89,7 @@ class AutoLearner:
 
         else:
             _, _, error_tensor_imputed, _ = util.tucker_on_error_tensor(ERROR_TENSOR, ranks_for_imputation, save_results=True, verbose=self.verbose)
+            np.save(os.path.join(DEFAULTS, 'error_tensor_imputed.npy'), error_tensor_imputed)
         
         # error tensor factorization
         # TODO: determine whether to generate new error matrix or use default/subset of default        
@@ -94,7 +98,7 @@ class AutoLearner:
         k_dataset_for_factorization = 30
         k_estimator_for_factorization = 30
         
-        core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, ranks=(k_dataset_for_factorization, 4, 2, 2, 8, k_estimator_for_factorization))
+        core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, ranks=(k_dataset_for_factorization, 4, 2, 8, k_estimator_for_factorization))
         pipeline_latent_factors = tl.unfold(tl.tenalg.multi_mode_dot(core_tr, factors_tr[1:], modes=[1, 2, 3, 4, 5]), mode=0)
         U_t, S_t, Vt_t = sp.linalg.svd(pipeline_latent_factors, full_matrices=False)
         Y_pca = Vt_t
@@ -135,7 +139,7 @@ class AutoLearner:
         self.ensemble_method = ensemble_method
         self.stacking_hyperparams = stacking_hyperparams
         if self.build_ensemble:
-            self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
+            self.ensemble = Ensemble(p_type=self.p_type, algorithm=self.ensemble_method, max_size=5, hyperparameters=self.stacking_hyperparams, verbose=self.verbose)
         else:
             self.ensemble = Model_collection(self.p_type)
         
@@ -144,7 +148,7 @@ class AutoLearner:
         self.runtime_predictor = convex_opt.initialize_runtime_predictor(runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm)
         self.dataset_ratio_threshold = dataset_ratio_threshold
 
-    def _fit(self, x_train, y_train, t_predicted, ranks=None, runtime_limit=None):
+    def _fit(self, x_train, y_train, t_predicted, ranks=None, runtime_limit=None, remaining_global=None):
         """This private method is a single round of the doubling process. It fits an AutoLearner object on a new dataset.
         This will sample the performance of several algorithms on the new dataset, predict performance on the rest, then construct an optimal ensemble model.
 
@@ -171,29 +175,33 @@ class AutoLearner:
 #             to_sample = linalg.pivot_columns(self.error_matrix)
 #         if self.selection_method == 'min_variance':
             # select algorithms to sample only from subset of algorithms that will run in allocated time
-        valid = np.where(t_predicted <= self.n_cores * runtime_limit/4)[0]
+        valid = np.where(t_predicted <= self.n_cores * runtime_limit/8)[0]
         Y = self.Y[:ranks[0], valid]
         
+#         print(valid)
+#         print(Y.shape)
         if self.verbose:
             print("Selecting an initial set of models to evaluate ...")
             
-        selected_columns_qr, t_sum, case = ED.pivot_columns_time(Y, t_predicted[valid], runtime_limit/2, 
+        selected_columns_qr, t_sum, case = ED.pivot_columns_time(Y, t_predicted[valid], runtime_limit/8, 
                                                         columns_to_avoid=None,
                                                         rank=Y.shape[0])
         if case == 'greedy_initialization':
             if self.verbose:
                 print(case)
-            to_sample = selected_columns_qr
+            to_sample = valid[selected_columns_qr]
 
         elif case == 'qr_initialization':        
-            to_sample = ED.greedy_stepwise_selection_with_time(Y=Y,
+            to_sample = valid[ED.greedy_stepwise_selection_with_time(Y=Y,
                                                         t=t_predicted[valid],
                                                         initialization=selected_columns_qr,
                                                         t_elapsed=t_sum,
-                                                        t_max=runtime_limit/4,
-                                                        idx_to_exclude=None)
+                                                        t_max=runtime_limit/8,
+                                                        idx_to_exclude=None)]
         # TODO: check if Y is rank-deficient, i.e. will ED problem fail
 
+        if self.verbose:
+            print(t_predicted[to_sample])
         
         if np.isnan(to_sample).any():
             to_sample = np.argsort(t_predicted)[:ranks[0]]
@@ -221,54 +229,74 @@ class AutoLearner:
                 self.ensemble.fitted = False
                 return
             
-        start = time.time()        
-        if self.selection_method is not 'random':            
+        start = time.time()       
+        if self.selection_method is not 'random':
+            candidate_indices = []
             # we only need to fit models on the new dataset if it has not been fitted already
             to_sample = list(set(to_sample) - self.sampled_indices)
             if self.verbose:
                 print('Sampling {} entries of new row...'.format(len(to_sample)))
+                
+#             return to_sample
+        
+            sampled_pipelines_single_round = [PipelineObject(p_type=self.p_type, config=self.pipeline_settings_on_dataset[i], index=i, verbose=self.verbose) for i in to_sample]
                   
             p1 = mp.Pool(self.n_cores)
-            sampled_pipelines_single_round = [PipelineObject(p_type=self.p_type, config=self.pipeline_settings_on_dataset[i], index=i, verbose=self.verbose) for i in to_sample]
-            sampled_pipeline_errors_single_round = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds])
-                                   for p in sampled_pipelines_single_round]
+            sampled_pipeline_errors_single_round = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, runtime_limit/4]) for p in sampled_pipelines_single_round]
             p1.close()
             p1.join()
+            
+            if self.verbose:
+                print("pool fitting completed")
 
             # predict performance of models not actually fitted on the new dataset
-            self.sampled_indices = self.sampled_indices.union(set(to_sample))
+
             for i, error in enumerate(sampled_pipeline_errors_single_round):
-                cv_error, cv_predictions = error.get()
-                sampled_pipelines_single_round[i].cv_error, sampled_pipelines_single_round[i].cv_predictions = cv_error, cv_predictions
-                sampled_pipelines_single_round[i].sampled = True
-                self.new_row[:, to_sample[i]] = cv_error
-                self.sampled_pipelines[to_sample[i]] = sampled_pipelines_single_round[i]
+                cv_error, cv_predictions, t_elapsed = error.get()
+                                
+                if not np.isnan(cv_error):
+                    sampled_pipelines_single_round[i].cv_error, sampled_pipelines_single_round[i].cv_predictions = cv_error, cv_predictions
+                    sampled_pipelines_single_round[i].sampled = True
+                    self.new_row[:, to_sample[i]] = cv_error
+                    self.sampled_pipelines[to_sample[i]] = sampled_pipelines_single_round[i]
+                    self.sampled_indices = self.sampled_indices.union(set([to_sample[i]]))
+                    candidate_indices.append(to_sample[i])
+                    self._t_predicted[to_sample[i]] = t_elapsed
+                else:
+                    self._t_predicted[to_sample[i]] = max(t_elapsed, self._t_predicted[to_sample[i]])
+                    
             self.new_row_pred = linalg.impute_with_coefficients(self.Y[:ranks[0], :], self.new_row, list(self.sampled_indices))
             
-            for idx in np.argsort(self.new_row[0, :])[:5]: # automatically put nans at the end of the list
-                if self.verbose:
-                    print(self.sampled_pipelines[idx])
-                self.ensemble.candidate_learners.append(self.sampled_pipelines[idx])
+            for idx in np.argsort(self.new_row[0, :])[:5]: # np.argsort automatically put nans at the end of the list
+                if not np.isnan(self.new_row[0, idx]):
+                    if self.verbose:
+                        print(self.sampled_pipelines[idx])
+                    self.ensemble.candidate_learners.append(self.sampled_pipelines[idx])
 
             # impute ALL entries
             # unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
             # self.new_row[:, unknown] = imputed[:, unknown]
 
             # k-fold fit candidate learners of ensemble
-            remaining = (runtime_limit - (time.time() - start)) * self.n_cores
+            remaining = (runtime_limit - (time.time() - start)) * self.n_cores            
+            first = (case == 'qr_initialization') and not self.ever_once_selected_best
             
-            if remaining > 0:
-            # add models predicted to be the best to list of candidate learners to avoid empty lists
-                if self.verbose:            
+            if remaining > 0 or first:
+            # add models predicted to be the best to list of candidate learners
+                if self.verbose:
+                    if remaining < 0 and first:
+                        print("Insufficient time in this doubling round, but we add models predicted to be the best at least once.")
                     print("length of sampled indices: {}".format(len(self.sampled_indices)))
 
     #             best_sampled_idx = list(self.sampled_indices)[int(np.argmin(self.new_row[:, list(self.sampled_indices)]))]
     #             assert self.sampled_pipelines[best_sampled_idx] is not None
     #             candidate_indices = [best_sampled_idx]
-                candidate_indices = []
+                
     #             self.ensemble.candidate_learners.append(self.sampled_pipelines[best_sampled_idx])
                 for i in np.argsort(self.new_row_pred[0]):
-                    if t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining:
+                    if (first and len(candidate_indices) <= 3) or t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining / 4:                   
+#                         if self.verbose:
+#                             print("Adding models predicted to be the best to the ensemble ...")
                         candidate_indices.append(i)
                         # last = candidate_indices.pop()
                         # assert last == best_sampled_idx
@@ -280,47 +308,65 @@ class AutoLearner:
                 # candidate learners that need to be k-fold fitted
                 to_fit = list(set(candidate_indices) - self.sampled_indices)
                 if self.verbose:
-                    print("candidate learners that need to be k-fold fitted: {}".format(to_fit))
+                    print("{} candidate learners need to be k-fold fitted".format(to_fit))
+            else:
+                if self.verbose:
+                    print("Insufficient time in this doubling round.")
         else:
             remaining = (runtime_limit - (time.time()-start)) * self.n_cores
             to_fit = to_sample.copy()
         
         remaining = (runtime_limit - (time.time() - start)) * self.n_cores
             
-        if remaining > 0:
-        
+        if remaining > 0 or first:         
             if len(to_fit) > 0:
                 # fit models predicted to have good performance and thus going to be added to the ensemble
-                p2 = mp.Pool(self.n_cores)
+                if self.verbose:
+                    print("Fitting {} pipelines predicted to be the best ...".format(len(to_fit)))
+                    
                 candidate_pipelines = [PipelineObject(p_type=self.p_type, config=self.pipeline_settings_on_dataset[i], index=i, verbose=self.verbose) for i in to_fit]
-                candidate_pipeline_errors = [p2.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds])
-                                          for p in candidate_pipelines]
+                
+#                 print(remaining_global)
+                p2 = mp.Pool(self.n_cores)
+                candidate_pipeline_errors = [p2.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, remaining_global/2]) for p in candidate_pipelines] # set a not-quite-small limit for promising models
                 p2.close()
-                p2.join()
+                p2.join()         
 
-                # update sampled indices
-                self.sampled_indices = self.sampled_indices.union(set(to_fit))
                 for i, error in enumerate(candidate_pipeline_errors):
-                    cv_error, cv_predictions = error.get()
-                    candidate_pipelines[i].cv_error, candidate_pipelines[i].cv_predictions = cv_error, cv_predictions
-                    candidate_pipelines[i].sampled = True
-                    self.new_row[:, to_fit[i]] = cv_error
-                    self.sampled_pipelines[to_fit[i]] = candidate_pipelines[i]
-                    self.ensemble.candidate_learners.append(candidate_pipelines[i])
-                # self.new_row = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+                    cv_error, cv_predictions, t_elapsed = error.get()
+                    
+                    if not np.isnan(cv_error):
+                        candidate_pipelines[i].cv_error, candidate_pipelines[i].cv_predictions = cv_error, cv_predictions
+                        candidate_pipelines[i].sampled = True
+                        self.new_row[:, to_fit[i]] = cv_error
+                        self.sampled_pipelines[to_fit[i]] = candidate_pipelines[i]
+                        self.ensemble.candidate_learners.append(candidate_pipelines[i])                    
+                        # update sampled indices
+                        self.sampled_indices = self.sampled_indices.union(set([to_fit[i]]))
+                        self._t_predicted[to_fit[i]] = t_elapsed
+                    else:
+                        self._t_predicted[to_fit[i]] = max(t_elapsed, self._t_predicted[to_fit[i]])
+                        
+#                 self.new_row = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+                self.ever_once_selected_best = True
+                
+        if len(self.ensemble.candidate_learners) > 0:
+            self.ensemble.fitted = True
+        
+            if self.verbose:
+                print('\nFitting ensemble of maximum size {}...'.format(len(self.ensemble.candidate_learners)))
+            # ensemble selection and fitting in the remaining time budget
+            self.ensemble.fit(x_train, y_train, remaining, self.sampled_pipelines)
+            for pipeline in self.ensemble.base_learners:
+                assert pipeline.index is not None
+                self.sampled_indices.add(pipeline.index)
+                self.sampled_pipelines[pipeline.index] = pipeline        
 
-        if self.verbose:
-            print('\nFitting ensemble of max. size {}...'.format(len(self.ensemble.candidate_learners)))
-        # ensemble selection and fitting in the remaining time budget
-        self.ensemble.fit(x_train, y_train, remaining, self.sampled_pipelines)
-        for pipeline in self.ensemble.base_learners:
-            assert pipeline.index is not None
-            self.sampled_indices.add(pipeline.index)
-            self.sampled_pipelines[pipeline.index] = pipeline
-        self.ensemble.fitted = True
-
-        if self.verbose:
-            print('\nAutoLearner fitting complete.')
+            if self.verbose:
+                print('\nAutoLearner fitting complete.')
+        else:
+            if self.verbose:
+                print("Insufficient time in this round.")
 
             
     def fit(self, x_train, y_train, verbose=False):
@@ -328,6 +374,8 @@ class AutoLearner:
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
         
         num_points, num_features = x_train.shape
+        
+        self.ever_once_selected_best = False
         
         if self.verbose:
             print('\nShape of training dataset: {} data points, {} features'.format(num_points, num_features))
@@ -345,6 +393,24 @@ class AutoLearner:
             if self.verbose:
                 print('\nTraining dataset resampled \nShape of resampled training dataset: {} data points, {} features'.format(x_train.shape[0], x_train.shape[1]))
         
+
+        if self.verbose:
+            print("Splitting training set into training and validation ..")
+            
+        # split data into training and validation sets
+#         try:
+#             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.2, stratify=y_train, random_state=0)
+#         except ValueError:
+#             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.2, random_state=0)
+        
+        x_tr = x_train
+        x_va = x_train
+        y_tr = y_train
+        y_va = y_train
+        
+        num_points_tr, num_features_tr = x_tr.shape
+        
+        self._t_predicted = np.maximum(self._predict_runtime(x_tr), 0.01)
         
         def p2f(x):
             return float(x.strip('%'))/100
@@ -355,39 +421,29 @@ class AutoLearner:
         for item in self.pipeline_settings:
             item_copy = copy.deepcopy(item)
             if item_copy['dim_reducer']['algorithm'] == 'PCA':
-                item_copy['dim_reducer']['hyperparameters']['n_components'] = int(p2f(item_copy['dim_reducer']['hyperparameters']['n_components']) * x_train.shape[1])
+                item_copy['dim_reducer']['hyperparameters']['n_components'] = int(min((self.n_folds - 1) * num_points_tr/self.n_folds, p2f(item_copy['dim_reducer']['hyperparameters']['n_components']) * num_features_tr))
             elif item_copy['dim_reducer']['algorithm'] == 'SelectKBest':
-                item_copy['dim_reducer']['hyperparameters']['k'] = int(p2f(item_copy['dim_reducer']['hyperparameters']['k']) * x_train.shape[1])
+                item_copy['dim_reducer']['hyperparameters']['k'] = int(p2f(item_copy['dim_reducer']['hyperparameters']['k']) * num_features_tr)
                 
             self.pipeline_settings_on_dataset.append(item_copy)
         
         
         start = time.time()
-        
-        if self.verbose:
-            print("Predicting pipeline running time ..")
-
-        # predict runtime for the training set of the new dataset.
-        t_predicted = convex_opt.predict_runtime(x_train.shape, saved_model='Class', model=self.runtime_predictor)
-        
-        if self.verbose:
-            print("Splitting training set into training and validation ..")
-        # split data into training and validation sets
-        try:
-            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, stratify=y_train, random_state=0)
-        except ValueError:
-            x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
 
         ranks = [linalg.approx_tensor_rank(self.error_tensor_imputed, threshold=0.05)]
         if self.build_ensemble:
-            t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(5*ranks[0][-1])].sum()))
+            t_init = 2**np.floor(np.log2(np.sort(self._t_predicted)[:int(5*ranks[0][-1])].sum()))
             t_init = max(1, t_init)
         else:
-            t_init = self.runtime_limit / 2
+            t_init = self.runtime_limit / 10
+        if self.verbose:
+            print("Runtime limit of initial round: {}".format(t_init))
         times = [t_init]
         losses = [0.5]
+        
+#         return
 
-        e_hat, actual_times, sampled, ensembles = [], [], [], []
+        e_hat, e_hat_pred, actual_times, sampled, ensembles = [], [], [], [], []
         
         if self.verbose:
             print("Doubling process started ...")
@@ -397,26 +453,29 @@ class AutoLearner:
             while time.time() - start < self.runtime_limit - t:
                 if verbose:
                     print('Fitting with ranks={}, t={}'.format(k, t))
-                if self.build_ensemble:
-                    self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
-                else:
-                    self.ensemble = Model_collection(self.p_type)
-                self._fit(x_tr, y_tr, t_predicted, ranks=k, runtime_limit=t)
+#                 if self.build_ensemble:
+#                     self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
+#                 else:
+#                     self.ensemble = Model_collection(self.p_type)
+                self._fit(x_tr, y_tr, self._t_predicted, ranks=k, runtime_limit=t, remaining_global=self.runtime_limit-time.time()+start)
                 if self.build_ensemble and self.ensemble.fitted:
                     if self.verbose:
                         print("\nGot a new ensemble in the round with runtime target {} seconds".format(t))
-                    loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+#                     loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+                    loss = self.ensemble.kfold_fit_validate(x_va, y_va, n_folds=3, timeout=(self.runtime_limit-time.time()+start)/2)[0]
 
                     # TEMPORARY: Record intermediate results
 
                     e_hat.append(np.copy(self.new_row))
+                    e_hat_pred.append(np.copy(self.new_row_pred))
                     actual_times.append(time.time() - start)
                     sampled.append(self.sampled_indices)
                     ensembles.append(self.ensemble)
                     losses.append(loss)
 
                     if loss == min(losses):
-                        ranks.append((k[0], k[1], k[2], k[3], k[4], k[5]+1))
+#                         ranks.append((k[0], k[1], k[2], k[3], k[4], k[5]+1))
+                        ranks.append((k[0], k[1], k[2], k[3], k[4]+1))
                         self.best = counter
                     else:
                         ranks.append(k)
@@ -454,12 +513,14 @@ class AutoLearner:
             try:
                 self.new_row = e_hat[self.best]
                 self.ensemble = ensembles[self.best]
+                self.predict_with_most_common_class = False
 
                 return {'ranks': ranks[:-1], 'runtime_limits': times[:-1], 'validation_loss': losses,
-                    'predicted_new_row': e_hat, 'actual_runtimes': actual_times, 'sampled_indices': sampled,
-                    'models': ensembles}
+                    'filled_new_row': e_hat, 'predicted_new_row': e_hat_pred, 'actual_runtimes': actual_times, 'sampled_indices': sampled, 'models': ensembles}
             except IndexError:
-                print("No ensemble built within time limit. Please try increasing the time limit or allocate more computational resources.")
+                self.y_train_mode = mode(y_train.flatten())[0][0]
+                self.predict_with_most_common_class = True
+                print("No ensemble built within time limit. The auto-learner is set to predict by the mode of class labels in the training set. Please try increasing the time limit or allocate more computational resources.")
         else:
             return
 
@@ -482,7 +543,10 @@ class AutoLearner:
         Returns:
             np.ndarray: Predicted labels.
         """
-        return self.ensemble.predict(x_test)
+        if self.predict_with_most_common_class:
+            return np.full(x_test.shape[0], self.y_train_mode)
+        else:
+            return self.ensemble.predict(x_test)
 
     def get_models(self):
         """Get details of the selected machine learning models and the ensemble.
@@ -493,4 +557,11 @@ class AutoLearner:
         """ Get accuracies of selected models.
         """
         return self.ensemble.get_model_accuracy(y_test)
+    
+    
+    def _predict_runtime(self, x_train):
+        # predict runtime for the training set of the new dataset.
+        if self.verbose:
+            print("Predicting pipeline running time ..")
+        return convex_opt.predict_runtime(x_train.shape, saved_model='Class', model=self.runtime_predictor)
 

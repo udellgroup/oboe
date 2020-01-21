@@ -8,6 +8,11 @@ from scipy.stats import mode
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from model import Model
 from sklearn.pipeline import Pipeline
+import time
+
+# timeout module
+import signal
+from contextlib import contextmanager
 
 # data cleaning
 from sklearn.impute import SimpleImputer
@@ -108,7 +113,7 @@ class PipelineObject:
         """
         return self.model.predict(x_test)
 
-    def kfold_fit_validate(self, x_train, y_train, n_folds=5, random_state=None):
+    def kfold_fit_validate(self, x_train, y_train, n_folds=5, timeout=1e5, random_state=None):
         """Performs k-fold cross validation on a training dataset. 
 
         Args:
@@ -120,30 +125,63 @@ class PipelineObject:
             float: Mean of k-fold cross validation error.
             np.ndarray: Predictions on the training dataset from cross validation.
         """
+        timeout = int(max(1, timeout))
+        
+        if timeout < 1e5:
+            if self.verbose:
+                print("having a capped running time of {} seconds".format(timeout))
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
         kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)
+        
+        start = time.time()
+        
+        def _kfold_fit_validate():
+            
+            for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
+                    x_tr = x_train[train_idx, :]
+                    y_tr = y_train[train_idx]
+                    x_te = x_train[test_idx, :]
+                    y_te = y_train[test_idx]
 
-        for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
-            x_tr = x_train[train_idx, :]
-            y_tr = y_train[train_idx]
-            x_te = x_train[test_idx, :]
-            y_te = y_train[test_idx]
+                    model = self._instantiate()
+                    if len(np.unique(y_tr)) > 1:
+                        model.fit(x_tr, y_tr)
+                        y_predicted[test_idx] = model.predict(x_te)
+                    else:
+                        y_predicted[test_idx] = y_tr[0]
+                    cv_errors[i] = util.error(y_te, y_predicted[test_idx], p_type=self.p_type)
 
-            model = self._instantiate()
-            if len(np.unique(y_tr)) > 1:
-                model.fit(x_tr, y_tr)
-                y_predicted[test_idx] = model.predict(x_te)
-            else:
-                y_predicted[test_idx] = y_tr[0]
-            cv_errors[i] = util.error(y_te, y_predicted[test_idx], p_type=self.p_type)
+            self.cv_error = cv_errors.mean()
+            self.cv_predictions = y_predicted
+            self.sampled = True
+            
 
-        self.cv_error = cv_errors.mean()
-        self.cv_predictions = y_predicted
-        self.sampled = True
-        if self.verbose:
-            print("{}-fold cross-validation completed.".format(n_folds))
-        return self.cv_error, self.cv_predictions
+        class TimeoutException(Exception): pass
+
+        @contextmanager
+        def time_limit(seconds):
+            def signal_handler(signum, frame):
+                raise TimeoutException("Time limit reached.")
+            signal.signal(signal.SIGALRM, signal_handler)
+            signal.alarm(seconds)
+            try:
+                yield
+            finally:
+                signal.alarm(0)
+
+        try:
+            with time_limit(timeout):
+                _kfold_fit_validate()
+        except TimeoutException as e:
+            self.cv_error = np.nan
+            self.cv_predictions = None
+            self.sampled = False
+            if self.verbose:
+                print("Pipeline fitting time limit reached.")
+             
+        t_elapsed = time.time() - start
+        return self.cv_error, self.cv_predictions, t_elapsed
 
     
 
@@ -157,20 +195,23 @@ class Ensemble(Model):
         model (object):         A scikit-learn object for the model.
     """
 
-    def __init__(self, p_type, algorithm, hyperparameters={}):
+    def __init__(self, p_type, algorithm, max_size=3, hyperparameters={}, verbose=False):
         super().__init__(p_type, algorithm, hyperparameters)
         self.candidate_learners = []
         self.base_learners = []
+        self.max_size = max_size
         self.second_layer_features = None
+        self.verbose = verbose
 
     def select_base_learners(self, y_train, fitted_base_learners):
         """Select base learners from candidate learners based on ensembling algorithm.
         """
         cv_errors = np.array([p.cv_error for p in self.candidate_learners])
-        print("cv errors: {}".format(cv_errors))
-        
+        if self.verbose:
+            print("cv errors: {}".format(cv_errors))
+
         # greedy ensemble forward selection
-        assert self.algorithm in {'greedy', 'stacking'}, "The ensemble selection method must be either greedy forward selection (by Caruana et al.) or stacking."
+        assert self.algorithm in {'greedy', 'stacking', 'best_several'}, "The ensemble selection method must be either greedy forward selection (by Caruana et al.), or stacking, or selecting several best algorithms."
         if self.algorithm == 'greedy':
             x_tr = ()
             # initial number of models in ensemble
@@ -190,7 +231,7 @@ class Ensemble(Model):
             candidates = list(np.argsort(cv_errors))
             error = util.error(y_train, mode(x_tr, axis=1)[0], self.p_type)
 
-            while True:
+            while len(self.base_learners) <= self.max_size:
                 looped = True
                 for i, idx in enumerate(candidates):
                     slm = np.hstack((x_tr, self.candidate_learners[i].cv_predictions.reshape(-1, 1)))
@@ -215,6 +256,11 @@ class Ensemble(Model):
             self.base_learners = self.candidate_learners
             x_tr = [p.cv_predictions.reshape(-1, 1) for p in self.candidate_learners]
             self.second_layer_features = np.hstack(tuple(x_tr))
+        elif self.algorithm == 'best_several':
+            self.base_learners = []
+            for i in np.argsort(cv_errors)[:(self.max_size)]:
+                self.base_learners.append(self.candidate_learners[i])
+
 
     def fit(self, x_train, y_train, runtime_limit=None, fitted_base_learners=None):
         """Add pipelines to the ensemble and fit the ensemble on training data.
@@ -227,14 +273,21 @@ class Ensemble(Model):
         Args to be implemented:
             runtime_limit (float):       Maximum runtime to be allocated to fitting.
         """
+        for pipeline in self.candidate_learners:
+            if not pipeline.fitted:
+                if self.verbose:
+                    print("Fitting a candidate learners not fitted before ..")
+                pipeline.fit(x_train, y_train)        
         self.select_base_learners(y_train, fitted_base_learners)
         # TODO: parallelize training over base learners
         for pipeline in self.base_learners:
             if not pipeline.fitted:
                 pipeline.fit(x_train, y_train)
-        if self.algorithm != 'greedy':
+        if self.algorithm == 'stacking':
             self.model.fit(self.second_layer_features, y_train)
         self.fitted = True
+        if self.verbose:
+            print("Fitted an ensemble with size {}".format(len(self.base_learners)))
 
     def refit(self, x_train, y_train):
         """Fit ensemble model on training data with base learners already added and unchanged.
@@ -268,7 +321,7 @@ class Ensemble(Model):
             y_predicted = np.reshape(pipeline.predict(x_test), [-1, 1])
             base_learner_predictions += (y_predicted, )
         self.x_te = np.hstack(base_learner_predictions)
-        if self.algorithm == 'greedy':
+        if self.algorithm == 'greedy' or self.algorithm == 'best_several':
             return mode(self.x_te, axis=1)[0].reshape((1, -1))
         else:
             return self.model.predict(self.x_te)
@@ -304,7 +357,77 @@ class Ensemble(Model):
         for i in range(self.x_te.shape[1]):
             accuracies.append(util.error(y_test, self.x_te[:, i], self.p_type))
         return accuracies
+    
+    
+    def kfold_fit_validate(self, x_train, y_train, n_folds=5, timeout=1e5, random_state=None):
+        """Performs k-fold cross validation on a training dataset. 
 
+        Args:
+            x_train (np.ndarray): Features of the training dataset.
+            y_train (np.ndarray): Labels of the training dataset.
+            n_folds (int):        Number of folds to use for cross validation.
+
+        Returns:
+            float: Mean of k-fold cross validation error.
+            np.ndarray: Predictions on the training dataset from cross validation.
+        """
+        timeout = int(max(1, timeout))
+        
+        if timeout < 1e5:
+            if self.verbose:
+                print("having a capped running time of {} seconds".format(timeout))
+        y_predicted = np.empty(y_train.shape)
+        cv_errors = np.empty(n_folds)
+        kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)
+        
+        start = time.time()
+        
+#         for pipeline in self.base_learners:            
+            
+        def _kfold_fit_validate():
+            
+            for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
+                    x_tr = x_train[train_idx, :]
+                    y_tr = y_train[train_idx]
+                    x_te = x_train[test_idx, :]
+                    y_te = y_train[test_idx]
+
+                    if len(np.unique(y_tr)) > 1:
+                        self.fit(x_tr, y_tr)
+                        y_predicted[test_idx] = self.predict(x_te)
+                    else:
+                        y_predicted[test_idx] = y_tr[0]
+                    cv_errors[i] = util.error(y_te, y_predicted[test_idx], p_type=self.p_type)
+
+            self.cv_error = cv_errors.mean()
+            self.cv_predictions = y_predicted
+            self.sampled = True            
+
+        class TimeoutException(Exception): pass
+
+        @contextmanager
+        def time_limit(seconds):
+            def signal_handler(signum, frame):
+                raise TimeoutException("Time limit reached.")
+            signal.signal(signal.SIGALRM, signal_handler)
+            signal.alarm(seconds)
+            try:
+                yield
+            finally:
+                signal.alarm(0)
+
+        try:
+            with time_limit(timeout):
+                _kfold_fit_validate()
+        except TimeoutException as e:
+            self.cv_error = np.nan
+            self.cv_predictions = None
+            self.sampled = False
+            if self.verbose:
+                print("Ensemble fitting time limit reached.")
+             
+        t_elapsed = time.time() - start
+        return self.cv_error, self.cv_predictions, t_elapsed
 
 class Model_collection(Ensemble):
     """An object representing a collection of individual machine learning pipelines.

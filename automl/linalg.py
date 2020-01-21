@@ -23,7 +23,7 @@ def approx_matrix_rank(a, threshold=0.03):
     return len(rank)
 
 
-def approx_tensor_rank(A, threshold=0.03, ranks_for_imputation=(20, 4, 2, 2, 8, 20), verbose=False):
+def approx_tensor_rank(A, threshold=0.03, ranks_for_imputation=(20, 4, 2, 8, 20), verbose=False):
     """Compute approximate (matrix) rank of a tensor. Right now this function only supports the calculation of approximte rank of dataset and estimator dimensions. 
 
     Args:
@@ -34,16 +34,18 @@ def approx_tensor_rank(A, threshold=0.03, ranks_for_imputation=(20, 4, 2, 2, 8, 
         tuple of int: The approximate rank of A in each dimension.
     """
     
+    dim = len(A.shape)
+    
     if np.sum(np.isnan(A)):
         _, _, A, _ = tucker_on_error_tensor(A, ranks=ranks_for_imputation, verbose=verbose)
         
     s0 = sp.linalg.svd(tl.unfold(A, mode=0), compute_uv=False)
     rank0 = len(s0[s0 >= threshold * s0[0]])
     
-    s5 = sp.linalg.svd(tl.unfold(A, mode=5), compute_uv=False)
-    rank5 = len(s5[s5 >= threshold * s5[0]])    
+    s_last = sp.linalg.svd(tl.unfold(A, mode=dim-1), compute_uv=False)
+    rank_last = len(s_last[s_last >= threshold * s_last[0]])    
     
-    return (rank0, 4, 2, 2, 8, rank5)
+    return (rank0, 4, 2, 8, rank_last)
 
 
 def pivot_columns(a, rank=None, threshold=None):

@@ -106,8 +106,8 @@ def greedy_stepwise_selection_with_time(Y, t, initialization, t_elapsed, t_max, 
         t_sum = t_sum + t[to_add]
 #         print("total time: {}".format(t_sum))
     
-    print(len(selected))
     if verbose:
+        print("number of selected design elements: {}".format(len(selected)))
         print("condition number of final design matrix: {}".format(np.linalg.cond(X)))
     return selected
 

@@ -41,7 +41,7 @@ class Model:
         Returns:
             object: A scikit-learn object.
         """
-        if self.algorithm == None or self.algorithm.lower() == 'greedy':
+        if self.algorithm == None or self.algorithm.lower() == 'greedy' or self.algorithm == 'best_several':
             return None
         try:
             return getattr(util, self.algorithm)(random_state=RANDOM_STATE, **self.hyperparameters)
