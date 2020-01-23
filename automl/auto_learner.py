@@ -58,10 +58,11 @@ class AutoLearner:
     def __init__(self,
                  p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=1, n_folds=3, runtime_limit=512, dataset_ratio_threshold=100,
-                 new_row=None, load_imputed=True, save_imputed=True, selection_method='ED', build_ensemble=True, ensemble_method='best_several', runtime_predictor_algorithm='LinearRegression',
+                 new_row=None, load_imputed=True, save_imputed=True, selection_method='ED', build_ensemble=True, ensemble_method='best_several', ensemble_max_size=5, runtime_predictor_algorithm='LinearRegression', random_state=0,
                  **stacking_hyperparams):
         
         self.verbose = verbose
+        self.random_state = random_state
         self.selection_method = selection_method
         # pipeline configurations
         self.p_type = p_type.lower()
@@ -139,7 +140,7 @@ class AutoLearner:
         self.ensemble_method = ensemble_method
         self.stacking_hyperparams = stacking_hyperparams
         if self.build_ensemble:
-            self.ensemble = Ensemble(p_type=self.p_type, algorithm=self.ensemble_method, max_size=5, hyperparameters=self.stacking_hyperparams, verbose=self.verbose)
+            self.ensemble = Ensemble(p_type=self.p_type, algorithm=self.ensemble_method, max_size=ensemble_max_size, hyperparameters=self.stacking_hyperparams, verbose=self.verbose)
         else:
             self.ensemble = Model_collection(self.p_type)
         
@@ -242,7 +243,7 @@ class AutoLearner:
             sampled_pipelines_single_round = [PipelineObject(p_type=self.p_type, config=self.pipeline_settings_on_dataset[i], index=i, verbose=self.verbose) for i in to_sample]
                   
             p1 = mp.Pool(self.n_cores)
-            sampled_pipeline_errors_single_round = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, runtime_limit/4]) for p in sampled_pipelines_single_round]
+            sampled_pipeline_errors_single_round = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, runtime_limit/4, self.random_state]) for p in sampled_pipelines_single_round]
             p1.close()
             p1.join()
             
@@ -328,7 +329,7 @@ class AutoLearner:
                 
 #                 print(remaining_global)
                 p2 = mp.Pool(self.n_cores)
-                candidate_pipeline_errors = [p2.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, remaining_global/2]) for p in candidate_pipelines] # set a not-quite-small limit for promising models
+                candidate_pipeline_errors = [p2.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, remaining_global/2, self.random_state]) for p in candidate_pipelines] # set a not-quite-small limit for promising models
                 p2.close()
                 p2.join()         
 
@@ -431,11 +432,15 @@ class AutoLearner:
         start = time.time()
 
         ranks = [linalg.approx_tensor_rank(self.error_tensor_imputed, threshold=0.05)]
-        if self.build_ensemble:
-            t_init = 2**np.floor(np.log2(np.sort(self._t_predicted)[:int(5*ranks[0][-1])].sum()))
-            t_init = max(1, t_init)
-        else:
-            t_init = self.runtime_limit / 10
+#         if self.build_ensemble:
+#             t_init = 2**np.floor(np.log2(np.sort(self._t_predicted)[:int(5*ranks[0][-1])].sum()))
+#             t_init = max(1, t_init)
+#         else:
+#             t_init = self.runtime_limit / 8
+
+        t_init = 2**np.floor(np.log2(np.sort(self._t_predicted)[:int(5*ranks[0][-1])].sum()))
+        t_init = max(2**np.floor(np.log2(self.runtime_limit/8)), t_init)
+            
         if self.verbose:
             print("Runtime limit of initial round: {}".format(t_init))
         times = [t_init]
@@ -543,10 +548,13 @@ class AutoLearner:
         Returns:
             np.ndarray: Predicted labels.
         """
-        if self.predict_with_most_common_class:
-            return np.full(x_test.shape[0], self.y_train_mode)
+        if self.build_ensemble:        
+            if self.predict_with_most_common_class:
+                return np.full(x_test.shape[0], self.y_train_mode)
+            else:
+                return self.ensemble.predict(x_test)
         else:
-            return self.ensemble.predict(x_test)
+            return 
 
     def get_models(self):
         """Get details of the selected machine learning models and the ensemble.
@@ -556,8 +564,7 @@ class AutoLearner:
     def get_model_accuracy(self, y_test):
         """ Get accuracies of selected models.
         """
-        return self.ensemble.get_model_accuracy(y_test)
-    
+        return self.ensemble.get_model_accuracy(y_test)    
     
     def _predict_runtime(self, x_train):
         # predict runtime for the training set of the new dataset.

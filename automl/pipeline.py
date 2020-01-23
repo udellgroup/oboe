@@ -132,8 +132,7 @@ class PipelineObject:
                 print("having a capped running time of {} seconds".format(timeout))
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
-        kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)
-        
+        kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)        
         start = time.time()
         
         def _kfold_fit_validate():
@@ -343,6 +342,10 @@ class Ensemble(Model):
             ensemble_learner_name = {}
             ensemble_learner_name[self.model.algorithm] = self.model.hyperparameters
             return {'ensemble method': 'stacking', 'ensemble learner': ensemble_learner_name, 'base learners': base_learner_names}
+        elif self.algorithm == 'best_several':
+#             ensemble_learner_name = {}
+#             ensemble_learner_name[self.model.algorithm] = self.model.hyperparameters
+            return {'ensemble method': 'select at most {} pipelines with smallest cv error'.format(self.max_size), 'base learners': base_learner_names}
 
     def get_pipeline_accuracies(self, y_test):
         """ Get prediction accuracies of each base learner when the true test labels are provided.
