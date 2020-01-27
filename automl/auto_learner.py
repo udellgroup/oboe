@@ -26,8 +26,8 @@ ERROR_TENSOR = np.load(os.path.join(DEFAULTS, 'error_tensor.npy'))
 RUNTIME_TENSOR = np.load(os.path.join(DEFAULTS, 'runtime_tensor.npy'))
 with open(os.path.join(DEFAULTS, 'training_index.pkl'), 'rb') as handle:
     TRAINING_INDEX = pickle.load(handle)
-with open(os.path.join(DEFAULTS, 'pipelines.pkl'), 'rb') as handle:
-    PIPELINES = pickle.load(handle)
+# with open(os.path.join(DEFAULTS, 'pipelines.pkl'), 'rb') as handle:
+#     PIPELINES = pickle.load(handle)
     
     
 class AutoLearner:
@@ -58,8 +58,10 @@ class AutoLearner:
     def __init__(self,
                  p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=1, n_folds=3, runtime_limit=512, dataset_ratio_threshold=100,
-                 new_row=None, load_imputed=True, save_imputed=True, selection_method='ED', build_ensemble=True, ensemble_method='best_several', ensemble_max_size=5, runtime_predictor_algorithm='LinearRegression', random_state=0,
-                 **stacking_hyperparams):
+                 new_row=None, load_imputed_error_tensor=True, save_imputed_error_tensor=True, 
+                 selection_method='ED', build_ensemble=True, load_saved_latent_factors=True, save_latent_factors=True,
+                 ensemble_method='best_several', ensemble_max_size=5, runtime_predictor_algorithm='LinearRegression',
+                 random_state=0, **stacking_hyperparams):
         
         self.verbose = verbose
         self.random_state = random_state
@@ -82,7 +84,7 @@ class AutoLearner:
         
         # error tensor completion
         ranks_for_imputation = (20, 4, 2, 8, 20)
-        if load_imputed:            
+        if load_imputed_error_tensor:            
             try:
                 error_tensor_imputed = np.load(os.path.join(DEFAULTS, 'error_tensor_imputed.npy'))
             except:
@@ -90,7 +92,10 @@ class AutoLearner:
 
         else:
             _, _, error_tensor_imputed, _ = util.tucker_on_error_tensor(ERROR_TENSOR, ranks_for_imputation, save_results=True, verbose=self.verbose)
-            np.save(os.path.join(DEFAULTS, 'error_tensor_imputed.npy'), error_tensor_imputed)
+            if save_imputed_error_tensor:
+                np.save(os.path.join(DEFAULTS, 'error_tensor_imputed.npy'), error_tensor_imputed)
+        
+        self.error_tensor_imputed = error_tensor_imputed
         
         # error tensor factorization
         # TODO: determine whether to generate new error matrix or use default/subset of default        
@@ -99,17 +104,40 @@ class AutoLearner:
         k_dataset_for_factorization = 30
         k_estimator_for_factorization = 30
         
-        core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, ranks=(k_dataset_for_factorization, 4, 2, 8, k_estimator_for_factorization))
-        pipeline_latent_factors = tl.unfold(tl.tenalg.multi_mode_dot(core_tr, factors_tr[1:], modes=[1, 2, 3, 4, 5]), mode=0)
-        U_t, S_t, Vt_t = sp.linalg.svd(pipeline_latent_factors, full_matrices=False)
-        Y_pca = Vt_t
-        self.Y = Y_pca
+        factorize_error_tensor = True
+        if load_saved_latent_factors:
+            try:
+                U_t = np.load(os.path.join(DEFAULTS, 'error_tensor_U_t.npy'))
+                S_t = np.load(os.path.join(DEFAULTS, 'error_tensor_S_t.npy'))
+                Vt_t = np.load(os.path.join(DEFAULTS, 'error_tensor_Vt_t.npy'))
+                factorize_error_tensor = False
+            except:
+                if self.verbose:
+                    print("No saved latent factors. Factorizing the error tensor now ...")
+            
         
-        self.error_tensor_imputed = error_tensor_imputed
+        if factorize_error_tensor:
+            if self.verbose:
+                print("Factorizing the error matrix to get latent factors ...")
+            core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, ranks=(k_dataset_for_factorization, 4, 2, 8, k_estimator_for_factorization))
+            pipeline_latent_factors = tl.unfold(tl.tenalg.multi_mode_dot(core_tr, factors_tr[1:], modes=[1, 2, 3, 4, 5]), mode=0)
+            U_t, S_t, Vt_t = sp.linalg.svd(pipeline_latent_factors, full_matrices=False)
+            if save_latent_factors:
+                if self.verbose:
+                    print("Saving latent factors ...")
+                np.save(os.path.join(DEFAULTS, 'error_tensor_U_t.npy'), U_t)
+                np.save(os.path.join(DEFAULTS, 'error_tensor_S_t.npy'), S_t)
+                np.save(os.path.join(DEFAULTS, 'error_tensor_Vt_t.npy'), Vt_t)
+        else:
+            if self.verbose:
+                print("Loading latent factors from storage ...")
+                
+        
         
         # not yet implemented the part of selecting specific algorithms and hyperparameters
         self.error_matrix = tl.unfold(error_tensor_imputed, mode=0)        
         self.runtime_matrix = tl.unfold(RUNTIME_TENSOR, mode=0)        
+        self.Y = Vt_t
         
 #         training_index = [eval(configs_matrix[i, 0])['dataset'] for i in range(configs_matrix.shape[0])]
         self.training_index = TRAINING_INDEX
@@ -118,22 +146,28 @@ class AutoLearner:
 #         for p in pipelines:
 #             del p['dataset']
         
-        pipelines = PIPELINES
+#         pipelines = PIPELINES
         
-        self.pipeline_settings = []
-        for item in pipelines:
-            r = {}
-            for key in item:
-                r[key] = eval(item[key])            
-            self.pipeline_settings.append(r)        
-
+#         self.pipeline_settings = []
+#         for item in pipelines:
+#             r = {}
+#             for key in item:
+#                 r[key] = eval(item[key])            
+#             self.pipeline_settings.append(r)
+        
+#         with open(os.path.join(DEFAULTS, 'pipeline_settings.pkl'), 'wb') as f:
+#             pickle.dump(self.pipeline_settings, f)
+        
+        with open(os.path.join(DEFAULTS, 'pipeline_settings.pkl'), 'rb') as handle:
+            self.pipeline_settings = pickle.load(handle)
+        
          # sampled & fitted models
-        self.new_row = new_row or np.full((1, len(pipelines)), np.nan)
-        self.new_row_pred = new_row or np.full((1, len(pipelines)), np.nan)
+        self.new_row = new_row or np.full((1, len(self.pipeline_settings)), np.nan)
+        self.new_row_pred = new_row or np.full((1, len(self.pipeline_settings)), np.nan)
         self.sampled_indices = set()
-        self.sampled_pipelines = [None] * len(pipelines)
+        self.sampled_pipelines = [None] * len(self.pipeline_settings)
         self.fitted_indices = set()
-        self.fitted_pipelines = [None] * len(pipelines)
+        self.fitted_pipelines = [None] * len(self.pipeline_settings)
 
         # ensemble attributes
         self.build_ensemble = build_ensemble
@@ -146,7 +180,7 @@ class AutoLearner:
         
         # runtime predictor
         self.runtime_predictor_algorithm = runtime_predictor_algorithm
-        self.runtime_predictor = convex_opt.initialize_runtime_predictor(runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm)
+        self.runtime_predictor = convex_opt.initialize_runtime_predictor(runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm, verbose=self.verbose)
         self.dataset_ratio_threshold = dataset_ratio_threshold
 
     def _fit(self, x_train, y_train, t_predicted, ranks=None, runtime_limit=None, remaining_global=None):

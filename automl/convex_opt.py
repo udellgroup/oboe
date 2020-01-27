@@ -8,28 +8,42 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 
-def initialize_runtime_predictor(runtime_matrix, runtimes_index, model_name='LinearRegression', save=False):
-    defaults_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'defaults')
-    try:
-        dataset_sizes = pd.read_csv(os.path.join(defaults_path, 'dataset_sizes.csv'), index_col=0)
-        sizes_index = np.array(dataset_sizes.index)
-        sizes = dataset_sizes.values
-    except FileNotFoundError:
-        sizes_index = []
-        sizes = []
-    if runtime_matrix is None:
-        runtime_tensor = pd.read_csv(os.path.join(defaults_path, 'runtime_tensor.csv'), index_col=0)
-        runtime_matrix = tl.unfold(runtime_tensor, mode=0)
+def initialize_runtime_predictor(runtime_matrix, runtimes_index, model_name='LinearRegression', load=True, save=False, verbose=False):
+    assert load != save, "Runtime predictor error: must either load previously initialized runtime predictors, or save the initialized runtime predictors at this time!"
     
-    if runtimes_index is None:
-        with open(os.path.join(defaults_path, 'configs_tensor.pkl'), 'rb') as handle:
-            configs_tensor = pickle.load(handle)
-        configs = tl.unfold(configs_tensor, mode=0)           
-        runtimes_index = [eval(configs[i, 0])['dataset'] for i in range(configs.shape[0])]
+    defaults_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'defaults')
+    
+    if load:
+        if verbose:
+            print("Loading saved runtime predictors ...")
+            
+        with open(os.path.join(defaults_path, 'runtime_predictors.pkl'), 'rb') as handle:
+            model = pickle.load(handle)
+            
+    elif save: 
+        if verbose:
+            print("Initializing runtime predictors and save to the defaults path ...")            
+        
+        try:
+            dataset_sizes = pd.read_csv(os.path.join(defaults_path, 'dataset_sizes.csv'), index_col=0)
+            sizes_index = np.array(dataset_sizes.index)
+            sizes = dataset_sizes.values
+        except FileNotFoundError:
+            sizes_index = []
+            sizes = []
+        if runtime_matrix is None:
+            runtime_tensor = pd.read_csv(os.path.join(defaults_path, 'runtime_tensor.csv'), index_col=0)
+            runtime_matrix = tl.unfold(runtime_tensor, mode=0)
 
-    model = RuntimePredictor(3, sizes, sizes_index, np.log(runtime_matrix), runtimes_index, model_name=model_name)
-    if save:
-        with open(os.path.join(defaults_path, 'runtime_predictor.pkl'), 'wb') as file:
+        if runtimes_index is None:
+            with open(os.path.join(defaults_path, 'configs_tensor.pkl'), 'rb') as handle:
+                configs_tensor = pickle.load(handle)
+            configs = tl.unfold(configs_tensor, mode=0)           
+            runtimes_index = [eval(configs[i, 0])['dataset'] for i in range(configs.shape[0])]
+
+        model = RuntimePredictor(3, sizes, sizes_index, np.log(runtime_matrix), runtimes_index, model_name=model_name)
+
+        with open(os.path.join(defaults_path, 'runtime_predictors.pkl'), 'wb') as file:
             pickle.dump(model, file)
     return model   
     
