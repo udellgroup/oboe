@@ -172,7 +172,8 @@ class PipelineObject:
         try:
             with time_limit(timeout):
                 _kfold_fit_validate()
-        except TimeoutException as e:
+#         except TimeoutException as e:
+        except: # Timeout exception or model fitting error
             self.cv_error = np.nan
             self.cv_predictions = None
             self.sampled = False

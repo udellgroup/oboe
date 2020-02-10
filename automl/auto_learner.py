@@ -419,7 +419,7 @@ class AutoLearner:
             num_points_new = int(min(5000, num_features * self.dataset_ratio_threshold))
             sampling_ratio = num_points_new / num_points
             if self.verbose:
-                print("dataset too skewed; sampling data points with sampling ratio {}".format(sampling_ratio))
+                print("dataset too skewed in having too many data points; sampling data points with sampling ratio {}".format(sampling_ratio))
             df_x_train = pd.DataFrame(x_train)
             df_y_train = pd.DataFrame(y_train, columns=['labels'])
             df_resampled = df_x_train.join(df_y_train).groupby('labels').apply(pd.DataFrame.sample, frac=sampling_ratio).reset_index(drop=True)
@@ -427,7 +427,6 @@ class AutoLearner:
             y_train = df_resampled['labels'].values
             if self.verbose:
                 print('\nTraining dataset resampled \nShape of resampled training dataset: {} data points, {} features'.format(x_train.shape[0], x_train.shape[1]))
-        
 
         if self.verbose:
             print("Splitting training set into training and validation ..")
@@ -444,7 +443,7 @@ class AutoLearner:
         y_va = y_train
         
         num_points_tr, num_features_tr = x_tr.shape
-        
+
         self._t_predicted = np.maximum(self._predict_runtime(x_tr), 0.01)
         
         def p2f(x):
@@ -465,6 +464,12 @@ class AutoLearner:
         
         start = time.time()
 
+#         if num_points / num_features < 2:
+#             if self.verbose:
+#                 print("dataset too skewed in having too many features ...")
+#             self._greedy_initial_selection(x_tr, y_tr, self._t_predicted, self.runtime_limit/4)
+        
+        
         ranks = [linalg.approx_tensor_rank(self.error_tensor_imputed, threshold=0.05)]
 #         if self.build_ensemble:
 #             t_init = 2**np.floor(np.log2(np.sort(self._t_predicted)[:int(5*ranks[0][-1])].sum()))
@@ -605,4 +610,45 @@ class AutoLearner:
         if self.verbose:
             print("Predicting pipeline running time ..")
         return convex_opt.predict_runtime(x_train.shape, saved_model='Class', model=self.runtime_predictor)
+    
+    def _greedy_initial_selection(self, x_train, y_train, t_predicted, runtime_limit):
+        if self.verbose:
+            print("Fitting fast pipelines that perform well on average.")
+
+        candidate_pipeline_indices = list(set(np.where(t_predicted <= runtime_limit / 8)[0]).intersection(
+            set(np.argsort(np.nanmedian(tl.unfold(self.error_tensor_imputed, mode=0), axis=0))[
+                :int(len(self.pipeline_settings_on_dataset)/50)])))
+
+
+        candidate_pipelines = [PipelineObject(p_type=self.p_type, config=self.pipeline_settings_on_dataset[i], index=i, verbose=self.verbose) for i in candidate_pipeline_indices]
+
+        p1 = mp.Pool(self.n_cores)
+        candidate_pipeline_errors = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, runtime_limit/4, self.random_state]) for p in candidate_pipelines]
+        p1.close()
+        p1.join()
+
+        if self.verbose:
+            print("Initial greedy fitting completed")
+
+
+        for i, error in enumerate(candidate_pipeline_errors):
+            cv_error, cv_predictions, t_elapsed = error.get()
+            if not np.isnan(cv_error):
+                candidate_pipelines[i].cv_error, candidate_pipelines[i].cv_predictions = cv_error, cv_predictions
+                candidate_pipelines[i].sampled = True
+                self.new_row[:, candidate_pipeline_indices[i]] = cv_error
+                self.sampled_pipelines[candidate_pipeline_indices[i]] = candidate_pipelines[i]
+                self.ensemble.candidate_learners.append(candidate_pipelines[i])                    
+                # update sampled indices
+                self.sampled_indices = self.sampled_indices.union(set([candidate_pipeline_indices[i]]))
+                self._t_predicted[candidate_pipeline_indices[i]] = t_elapsed
+            else:
+                self._t_predicted[candidate_pipeline_indices[i]] = max(t_elapsed, self._t_predicted[candidate_pipeline_indices[i]])
+
+        if len(self.ensemble.candidate_learners) > 0:
+            self.ensemble.fitted = True        
+            self.ensemble.fit(x_train, y_train)
+        else:
+            if self.verbose:
+                print("Insufficient time to fit fast and on average best-performing pipelines.")
 
