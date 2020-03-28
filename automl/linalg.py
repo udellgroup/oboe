@@ -61,7 +61,7 @@ def pivot_columns(a, rank=None, threshold=None):
     """
     assert (threshold is None) != (rank is None), "Exactly one of threshold and rank should be specified."
     if threshold is not None:
-        rank = approx_rank(a, threshold)
+        rank = approx_matrix_rank(a, threshold)
     return qr(a, pivoting=True)[2][:rank]
 
 
@@ -78,7 +78,7 @@ def pca(a, rank=None, threshold=None):
     """
     assert (threshold is None) != (rank is None), "Exactly one of threshold and rank should be specified."
     if threshold is not None:
-        rank = approx_rank(a, threshold)
+        rank = approx_matrix_rank(a, threshold)
     # std = np.std(a, axis=0)
     u, s, vt = svds(a, k=rank)
 

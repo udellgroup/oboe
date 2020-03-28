@@ -4,8 +4,9 @@ Pre-process datasets.
 
 import numpy as np
 from sklearn.preprocessing import scale
+from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.preprocessing import Imputer
+from sklearn.impute import SimpleImputer
 
 
 def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_encode=True):
@@ -30,14 +31,14 @@ def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_en
         if np.array(categorical).any():
             raw_categorical = raw_data[:, categorical]
             # impute missing entries in categorical features using the most frequent number
-            imp_categorical = Imputer(missing_values='NaN', strategy='most_frequent', axis=0, copy=False)
+            imp_categorical = SimpleImputer(strategy='most_frequent', copy=False)
             processed.append(imp_categorical.fit_transform(raw_categorical))
 
         # if there are any numeric features
         if np.invert(categorical).any():
             raw_numeric = raw_data[:, np.invert(categorical)]
             # impute missing entries in non-categorical features using mean
-            imp_numeric = Imputer(missing_values='NaN', strategy='mean', axis=0, copy=False)
+            imp_numeric = SimpleImputer(strategy='mean', copy=False)
             processed.append(imp_numeric.fit_transform(raw_numeric))
 
         # data has now been re-ordered so all categorical features appear first
@@ -49,10 +50,13 @@ def pre_process(raw_data, categorical, impute=True, standardize=True, one_hot_en
 
     # one-hot encoding for categorical features (only if there exist any)
     if one_hot_encode and np.array(categorical).any():
-        encoder = OneHotEncoder(categorical_features=categorical)
-        processed_data = encoder.fit_transform(processed_data).toarray()
+        categorical_columns = list(np.where(categorical)[0])
+#         encoder = OneHotEncoder(categorical_features=categorical)
+        encoder = ColumnTransformer([('one_hot_encoder', OneHotEncoder(), categorical_columns)], 
+                        remainder='passthrough', sparse_threshold=0)
+        processed_data = encoder.fit_transform(processed_data)
         categorical = np.zeros(processed_data.shape[1], dtype=bool)
-            
+    
     # standardize all numeric and one-hot encoded categorical features
     if standardize:
         processed_data[:, np.invert(categorical)] = scale(processed_data[:, np.invert(categorical)])

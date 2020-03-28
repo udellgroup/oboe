@@ -25,24 +25,23 @@ DEFAULTS = pkg_resources.resource_filename(__name__, 'defaults')
 ERROR_TENSOR = np.load(os.path.join(DEFAULTS, 'error_tensor.npy'))
 RUNTIME_TENSOR = np.load(os.path.join(DEFAULTS, 'runtime_tensor.npy'))
 with open(os.path.join(DEFAULTS, 'training_index.pkl'), 'rb') as handle:
-    TRAINING_INDEX = pickle.load(handle)
-# with open(os.path.join(DEFAULTS, 'pipelines.pkl'), 'rb') as handle:
-#     PIPELINES = pickle.load(handle)
-    
+    TRAINING_INDEX = pickle.load(handle)    
     
 class AutoLearner:
     """An object that automatically selects pipelines by greedy D-optimal design.
 
-    Attributes:
+    Basic attributes:
         p_type (str):                  Problem type. One of {'classification', 'regression'}.
         algorithms (list):             A list of algorithm types to be considered, in strings. (e.g. ['KNN', 'lSVM']).
         hyperparameters (dict):        A nested dict of hyperparameters to be considered.
         n_folds (int):                 Number of cross-validation folds.
         verbose (bool):                Whether or not to generate print statements that showcase the progress.
         n_cores (int):                 Maximum number of cores over which to parallelize (None means no limit).
-        runtime_limit (int):           Maximum training time for AutoLearner, in seconds.
-        dataset_ratio_threshold(float):The threshold of dataset ratio for dataset subsampling, if the training set is tall and skinny (number of data points much larger than number of features).
-        new_row (np.ndarray):          Predicted row of error matrix.
+        runtime_limit (int):           Maximum training time for AutoLearner, in seconds.        
+        
+    Advanced attributes:
+        new_row (np.ndarray):          Predicted row of matricized error tensor, corresponding to the new dataset. Default None. 
+        dataset_ratio_threshold(float):The threshold of dataset ratio (number of points / number of features) for dataset subsampling, if the training set is tall and skinny (number of data points much larger than number of features).
         runtime_predictor_algorithm (str):       
                                        Model for runtime prediction. One of {'LinearRegression', 'KNeighborsRegressor'}.
         ensemble_method (str):         Ensemble method. One of {'greedy', 'stacking', 'best_several'}.
@@ -58,7 +57,7 @@ class AutoLearner:
     def __init__(self,
                  p_type='classification', algorithms=None, hyperparameters=None, verbose=False,
                  n_cores=1, n_folds=3, runtime_limit=512, dataset_ratio_threshold=100,
-                 new_row=None, load_imputed_error_tensor=True, save_imputed_error_tensor=True, 
+                 new_row=None, load_imputed_error_tensor=True, path_to_imputed_error_tensor='default', save_imputed_error_tensor=True, 
                  selection_method='ED', build_ensemble=True, load_saved_latent_factors=True, save_latent_factors=True,
                  ensemble_method='best_several', ensemble_max_size=5, runtime_predictor_algorithm='LinearRegression',
                  random_state=0, **stacking_hyperparams):
@@ -86,10 +85,14 @@ class AutoLearner:
         ranks_for_imputation = (20, 4, 2, 8, 20)
         if load_imputed_error_tensor:            
             try:
-                error_tensor_imputed = np.load(os.path.join(DEFAULTS, 'error_tensor_imputed.npy'))
+                if path_to_imputed_error_tensor == 'default':
+                    error_tensor_imputed = np.load(os.path.join(DEFAULTS, 'error_tensor_imputed.npy'))
+                else:
+                    if self.verbose:
+                        print("loading customized tensor at {} ...".format(path_to_imputed_error_tensor))
+                    error_tensor_imputed = np.load(path_to_imputed_error_tensor)
             except:
                 print("no files!")
-
         else:
             _, _, error_tensor_imputed, _ = util.tucker_on_error_tensor(ERROR_TENSOR, ranks_for_imputation, save_results=True, verbose=self.verbose)
             if save_imputed_error_tensor:
@@ -113,8 +116,7 @@ class AutoLearner:
                 factorize_error_tensor = False
             except:
                 if self.verbose:
-                    print("No saved latent factors. Factorizing the error tensor now ...")
-            
+                    print("No saved latent factors. Factorizing the error tensor now ...")            
         
         if factorize_error_tensor:
             if self.verbose:
@@ -130,8 +132,7 @@ class AutoLearner:
                 np.save(os.path.join(DEFAULTS, 'error_tensor_Vt_t.npy'), Vt_t)
         else:
             if self.verbose:
-                print("Loading latent factors from storage ...")
-                
+                print("Loading latent factors from storage ...")       
         
         
         # not yet implemented the part of selecting specific algorithms and hyperparameters
@@ -141,22 +142,6 @@ class AutoLearner:
         
 #         training_index = [eval(configs_matrix[i, 0])['dataset'] for i in range(configs_matrix.shape[0])]
         self.training_index = TRAINING_INDEX
-        
-#         pipelines = [eval(self.configs_matrix[0, i]) for i in range(self.configs_matrix.shape[1])]
-#         for p in pipelines:
-#             del p['dataset']
-        
-#         pipelines = PIPELINES
-        
-#         self.pipeline_settings = []
-#         for item in pipelines:
-#             r = {}
-#             for key in item:
-#                 r[key] = eval(item[key])            
-#             self.pipeline_settings.append(r)
-        
-#         with open(os.path.join(DEFAULTS, 'pipeline_settings.pkl'), 'wb') as f:
-#             pickle.dump(self.pipeline_settings, f)
         
         with open(os.path.join(DEFAULTS, 'pipeline_settings.pkl'), 'rb') as handle:
             self.pipeline_settings = pickle.load(handle)
@@ -193,6 +178,7 @@ class AutoLearner:
             t_predicted (np.ndarray): Predicted running time.
             ranks (int):            Rank of error tensor factorization.
             runtime_limit (float): Maximum time to allocate to AutoLearner fitting.
+            remaining_global (float): The remaining runtime 
         """
         if self.verbose:
             print("\nSingle round runtime target: {}".format(runtime_limit))
@@ -206,15 +192,9 @@ class AutoLearner:
             print('Fitting AutoLearner with maximum runtime {} seconds'.format(runtime_limit))
 
         # cold-start: pick the initial set of models to fit on the new dataset
-#         if self.selection_method == 'qr':
-#             to_sample = linalg.pivot_columns(self.error_matrix)
-#         if self.selection_method == 'min_variance':
-            # select algorithms to sample only from subset of algorithms that will run in allocated time
         valid = np.where(t_predicted <= self.n_cores * runtime_limit/8)[0]
         Y = self.Y[:ranks[0], valid]
         
-#         print(valid)
-#         print(Y.shape)
         if self.verbose:
             print("Selecting an initial set of models to evaluate ...")
             
@@ -240,20 +220,6 @@ class AutoLearner:
         
         if np.isnan(to_sample).any():
             to_sample = np.argsort(t_predicted)[:ranks[0]]
-        
-#         elif self.selection_method == 'random':
-#             to_sample = []
-#             # set of algorithms that are predicted to finish within given budget
-#             to_sample_candidates = np.where(t_predicted <= runtime_limit/2)[0]
-#             # remove algorithms that have been sampled already
-#             to_sample_candidates = list(set(to_sample_candidates) - self.sampled_indices)
-#             # if the remaining time is not sufficient for random sampling
-#             if len(to_sample_candidates) == 0:
-#                 to_sample = np.array([np.argmin(t_predicted)])
-#             else:
-#                 to_sample = np.random.choice(to_sample_candidates, min(self.n_cores, len(to_sample_candidates)), replace=False)
-#         else:
-#             to_sample = np.arange(0, self.new_row.shape[1])
         
         if len(to_sample) == 0 and len(self.sampled_indices) == 0:
             # if no columns are selected in first iteration (log det instability), sample n fastest columns
@@ -322,10 +288,6 @@ class AutoLearner:
                     if remaining < 0 and first:
                         print("Insufficient time in this doubling round, but we add models predicted to be the best at least once.")
                     print("length of sampled indices: {}".format(len(self.sampled_indices)))
-
-    #             best_sampled_idx = list(self.sampled_indices)[int(np.argmin(self.new_row[:, list(self.sampled_indices)]))]
-    #             assert self.sampled_pipelines[best_sampled_idx] is not None
-    #             candidate_indices = [best_sampled_idx]
                 
     #             self.ensemble.candidate_learners.append(self.sampled_pipelines[best_sampled_idx])
                 for i in np.argsort(self.new_row_pred[0]):
@@ -333,9 +295,6 @@ class AutoLearner:
 #                         if self.verbose:
 #                             print("Adding models predicted to be the best to the ensemble ...")
                         candidate_indices.append(i)
-                        # last = candidate_indices.pop()
-                        # assert last == best_sampled_idx
-    #                     candidate_indices.append(i)
                         # if model has already been k-fold fitted, immediately add to candidate learners
                         if i in self.sampled_indices:
                             assert self.sampled_pipelines[i] is not None
@@ -437,6 +396,7 @@ class AutoLearner:
 #         except ValueError:
 #             x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.2, random_state=0)
         
+        # for now, do not do validation, but instead do cross-validation
         x_tr = x_train
         x_va = x_train
         y_tr = y_train
