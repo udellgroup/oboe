@@ -82,7 +82,7 @@ class AutoLearner:
         self.n_folds = n_folds
         
         # error tensor completion
-        ranks_for_imputation = (20, 4, 2, 8, 20)
+        ranks_for_imputation = (20, 4, 2, 10, 15, 40)
         if load_imputed_error_tensor:            
             try:
                 if path_to_imputed_error_tensor == 'default':
@@ -104,8 +104,8 @@ class AutoLearner:
         # TODO: determine whether to generate new error matrix or use default/subset of default        
         
         # the maximum ranks for dataset and estimator dimensions
-        k_dataset_for_factorization = 30
-        k_estimator_for_factorization = 30
+        k_dataset_for_factorization = 20
+        k_estimator_for_factorization = 40
         
         factorize_error_tensor = True
         if load_saved_latent_factors:
@@ -121,7 +121,7 @@ class AutoLearner:
         if factorize_error_tensor:
             if self.verbose:
                 print("Factorizing the error matrix to get latent factors ...")
-            core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, ranks=(k_dataset_for_factorization, 4, 2, 8, k_estimator_for_factorization))
+            core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, ranks=(k_dataset_for_factorization, ranks_for_imputation[1], ranks_for_imputation[2], ranks_for_imputation[3], ranks_for_imputation[4], k_estimator_for_factorization))
             pipeline_latent_factors = tl.unfold(tl.tenalg.multi_mode_dot(core_tr, factors_tr[1:], modes=[1, 2, 3, 4, 5]), mode=0)
             U_t, S_t, Vt_t = sp.linalg.svd(pipeline_latent_factors, full_matrices=False)
             if save_latent_factors:
@@ -165,10 +165,11 @@ class AutoLearner:
         
         # runtime predictor
         self.runtime_predictor_algorithm = runtime_predictor_algorithm
-        self.runtime_predictor = convex_opt.initialize_runtime_predictor(runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm, verbose=self.verbose)
+        self.runtime_predictor = convex_opt.initialize_runtime_predictor(runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm, verbose=self.verbose, load=True, save=False)
         self.dataset_ratio_threshold = dataset_ratio_threshold
+        self.columns_to_avoid = list(set(np.arange(len(self.runtime_predictor.models))) - set(np.where(self.runtime_predictor.models)[0])) # not compatible with the valid variable in self.fit() for now
 
-    def _fit(self, x_train, y_train, t_predicted, ranks=None, runtime_limit=None, remaining_global=None):
+    def _fit(self, x_train, y_train, categorical, t_predicted, ranks=None, runtime_limit=None, remaining_global=None):
         """This private method is a single round of the doubling process. It fits an AutoLearner object on a new dataset.
         This will sample the performance of several algorithms on the new dataset, predict performance on the rest, then construct an optimal ensemble model.
 
@@ -243,7 +244,7 @@ class AutoLearner:
             sampled_pipelines_single_round = [PipelineObject(p_type=self.p_type, config=self.pipeline_settings_on_dataset[i], index=i, verbose=self.verbose) for i in to_sample]
                   
             p1 = mp.Pool(self.n_cores)
-            sampled_pipeline_errors_single_round = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, runtime_limit/4, self.random_state]) for p in sampled_pipelines_single_round]
+            sampled_pipeline_errors_single_round = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, categorical, self.n_folds, runtime_limit/4, self.random_state]) for p in sampled_pipelines_single_round]
             p1.close()
             p1.join()
             
@@ -322,7 +323,7 @@ class AutoLearner:
                 
 #                 print(remaining_global)
                 p2 = mp.Pool(self.n_cores)
-                candidate_pipeline_errors = [p2.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, remaining_global/2, self.random_state]) for p in candidate_pipelines] # set a not-quite-small limit for promising models
+                candidate_pipeline_errors = [p2.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, categorical, self.n_folds, remaining_global/2, self.random_state]) for p in candidate_pipelines] # set a not-quite-small limit for promising models
                 p2.close()
                 p2.join()         
 
@@ -350,7 +351,7 @@ class AutoLearner:
             if self.verbose:
                 print('\nFitting ensemble of maximum size {}...'.format(len(self.ensemble.candidate_learners)))
             # ensemble selection and fitting in the remaining time budget
-            self.ensemble.fit(x_train, y_train, remaining, self.sampled_pipelines)
+            self.ensemble.fit(x_train, y_train, categorical, remaining, self.sampled_pipelines)
             for pipeline in self.ensemble.base_learners:
                 assert pipeline.index is not None
                 self.sampled_indices.add(pipeline.index)
@@ -363,10 +364,13 @@ class AutoLearner:
                 print("Insufficient time in this round.")
 
             
-    def fit(self, x_train, y_train, verbose=False):
+    def fit(self, x_train, y_train, categorical=None, verbose=False):
 
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
         
+        if categorical is None:
+            categorical = np.array([False for _ in range(x_train.shape[1])])
+
         num_points, num_features = x_train.shape
         
         self.ever_once_selected_best = False
@@ -414,9 +418,9 @@ class AutoLearner:
         
         for item in self.pipeline_settings:
             item_copy = copy.deepcopy(item)
-            if item_copy['dim_reducer']['algorithm'] == 'PCA':
-                item_copy['dim_reducer']['hyperparameters']['n_components'] = int(min((self.n_folds - 1) * num_points_tr/self.n_folds, p2f(item_copy['dim_reducer']['hyperparameters']['n_components']) * num_features_tr))
-            elif item_copy['dim_reducer']['algorithm'] == 'SelectKBest':
+#             if item_copy['dim_reducer']['algorithm'] == 'PCA':
+#                 item_copy['dim_reducer']['hyperparameters']['n_components'] = int(min((self.n_folds - 1) * num_points_tr/self.n_folds, p2f(item_copy['dim_reducer']['hyperparameters']['n_components']) * num_features_tr))
+            if item_copy['dim_reducer']['algorithm'] == 'SelectKBest':
                 item_copy['dim_reducer']['hyperparameters']['k'] = int(p2f(item_copy['dim_reducer']['hyperparameters']['k']) * num_features_tr)
                 
             self.pipeline_settings_on_dataset.append(item_copy)
@@ -461,12 +465,12 @@ class AutoLearner:
 #                     self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
 #                 else:
 #                     self.ensemble = Model_collection(self.p_type)
-                self._fit(x_tr, y_tr, self._t_predicted, ranks=k, runtime_limit=t, remaining_global=self.runtime_limit-time.time()+start)
+                self._fit(x_tr, y_tr, categorical, self._t_predicted, ranks=k, runtime_limit=t, remaining_global=self.runtime_limit-time.time()+start)
                 if self.build_ensemble and self.ensemble.fitted:
                     if self.verbose:
                         print("\nGot a new ensemble in the round with runtime target {} seconds".format(t))
 #                     loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
-                    loss = self.ensemble.kfold_fit_validate(x_va, y_va, n_folds=3, timeout=(self.runtime_limit-time.time()+start)/2)[0]
+                    loss = self.ensemble.kfold_fit_validate(x_va, y_va, categorical, n_folds=3, timeout=(self.runtime_limit-time.time()+start)/2)[0]
 
                     # TEMPORARY: Record intermediate results
 
@@ -528,7 +532,7 @@ class AutoLearner:
         else:
             return
 
-    def refit(self, x_train, y_train):
+    def refit(self, x_train, y_train, categorical=None):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
         stacked learner of an existing model, and so algorithm and hyperparameter selection may not be optimal.
 
@@ -536,8 +540,10 @@ class AutoLearner:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
         """
+        if categorical is None:
+            categorical = np.array([False for _ in range(x_train.shape[1])])
         assert self.ensemble.fitted, "Cannot refit unless model has been fit."
-        self.ensemble.refit(x_train, y_train)
+        self.ensemble.refit(x_train, y_train, categorical)
 
     def predict(self, x_test):
         """Generate predictions on test data.
@@ -572,6 +578,9 @@ class AutoLearner:
         return convex_opt.predict_runtime(x_train.shape, saved_model='Class', model=self.runtime_predictor)
     
     def _greedy_initial_selection(self, x_train, y_train, t_predicted, runtime_limit):
+        """
+        Not yet updated to incorporate the categorical list.
+        """
         if self.verbose:
             print("Fitting fast pipelines that perform well on average.")
 
@@ -583,7 +592,7 @@ class AutoLearner:
         candidate_pipelines = [PipelineObject(p_type=self.p_type, config=self.pipeline_settings_on_dataset[i], index=i, verbose=self.verbose) for i in candidate_pipeline_indices]
 
         p1 = mp.Pool(self.n_cores)
-        candidate_pipeline_errors = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, self.n_folds, runtime_limit/4, self.random_state]) for p in candidate_pipelines]
+        candidate_pipeline_errors = [p1.apply_async(PipelineObject.kfold_fit_validate, args=[p, x_train, y_train, categorical, self.n_folds, runtime_limit/4, self.random_state]) for p in candidate_pipelines]
         p1.close()
         p1.join()
 

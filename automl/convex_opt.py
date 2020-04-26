@@ -32,14 +32,16 @@ def initialize_runtime_predictor(runtime_matrix, runtimes_index, model_name='Lin
             sizes_index = []
             sizes = []
         if runtime_matrix is None:
-            runtime_tensor = pd.read_csv(os.path.join(defaults_path, 'runtime_tensor.csv'), index_col=0)
+            runtime_tensor = np.load(os.path.join(defaults_path, 'runtime_tensor.npy'))
             runtime_matrix = tl.unfold(runtime_tensor, mode=0)
+            
+#         print(np.where(np.sum(np.invert(np.isnan(runtime_matrix)), axis=0) == 0))
 
-        if runtimes_index is None:
-            with open(os.path.join(defaults_path, 'configs_tensor.pkl'), 'rb') as handle:
-                configs_tensor = pickle.load(handle)
-            configs = tl.unfold(configs_tensor, mode=0)           
-            runtimes_index = [eval(configs[i, 0])['dataset'] for i in range(configs.shape[0])]
+#         if runtimes_index is None:
+#             with open(os.path.join(defaults_path, 'pipeline_settings_tensor.pkl'), 'rb') as handle:
+#                 configs_tensor = pickle.load(handle)
+#             configs = tl.unfold(configs_tensor, mode=0)           
+#             runtimes_index = [eval(configs[i, 0])['dataset'] for i in range(configs.shape[0])]
 
         model = RuntimePredictor(3, sizes, sizes_index, np.log(runtime_matrix), runtimes_index, model_name=model_name)
 
@@ -106,10 +108,13 @@ class RuntimePredictor:
             no_nan_indices = np.where(np.invert(np.isnan(runtime)))[0]
             runtime_no_nan = runtime[no_nan_indices]
             
+            if len(no_nan_indices) == 0: # no trials of this pipeline finished on any of the training datasets
+                continue
             
             if self.model_name == 'LinearRegression':
                 sizes_train_poly_no_nan = sizes_train_poly[no_nan_indices]
                 self.models[i] = LinearRegression().fit(sizes_train_poly_no_nan, runtime_no_nan)
+
             elif self.model_name == 'KNeighborsRegressor':
                 sizes_train_no_nan = sizes_train[no_nan_indices]
                 def metric(a, b):
@@ -136,14 +141,17 @@ class RuntimePredictor:
         if self.model_name == 'LinearRegression':
             size_test = np.append(size, np.log(size[0]))
             size_test_poly = PolynomialFeatures(self.degree).fit_transform([size_test])
-            predictions = np.zeros(self.n_models)
+            predictions = np.full(self.n_models, np.nan)
             for i in range(self.n_models):
-                predictions[i] = self.models[i].predict(size_test_poly)[0]
+                if self.models[i] is not None:
+#                     print(self.models[i])
+                    predictions[i] = self.models[i].predict(size_test_poly)[0]
     
         elif self.model_name == 'KNeighborsRegressor':
-            predictions = np.zeros(self.n_models)
+            predictions = np.full(self.n_models, np.nan)
             for i in range(self.n_models):
-                predictions[i] = self.models[i].predict(np.array(size).reshape(1, -1))[0]
+                if self.models[i] is not None:
+                    predictions[i] = self.models[i].predict(np.array(size).reshape(1, -1))[0]
         
 #        # TO BE REMOVED: sanity check
 #

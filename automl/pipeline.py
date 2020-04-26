@@ -19,13 +19,19 @@ from sklearn.impute import SimpleImputer
 # from sklearn.decomposition import PCA
 
 # encoder
+from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 
 # standardizer
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MaxAbsScaler, MinMaxScaler, Normalizer, RobustScaler, Binarizer
+# from sklearn.kernel_approximation import Nystroem
 
 # dimensionality reducer
 from sklearn.decomposition import PCA
+from sklearn.decomposition import FastICA
+from sklearn.feature_selection import SelectFwe
+from sklearn.feature_selection import SelectPercentile
+# from sklearn.feature_selection import RFE
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.feature_selection import SelectKBest, chi2
 
@@ -35,14 +41,14 @@ from sklearn.tree import DecisionTreeClassifier as DT
 from sklearn.ensemble import RandomForestClassifier as RF
 from sklearn.ensemble import ExtraTreesClassifier as ExtraTrees
 from sklearn.ensemble import GradientBoostingClassifier as GBT
+from sklearn.naive_bayes import GaussianNB as GNB
 from sklearn.ensemble import AdaBoostClassifier as AB
 from sklearn.svm import LinearSVC as lSVM
 from sklearn.svm import SVC as kSVM
 from sklearn.linear_model import LogisticRegression as Logit
 from sklearn.linear_model import Perceptron
-from sklearn.naive_bayes import GaussianNB as GNB
+from sklearn.naive_bayes import GaussianNB, BernoulliNB, MultinomialNB
 from sklearn.neural_network import MLPClassifier as MLP
-
 
 RANDOM_STATE = 0
 
@@ -58,29 +64,40 @@ class PipelineObject:
 
     def __init__(self, config, index=None, p_type='classification', verbose=False):
         self.p_type = p_type
-        
-        # this ensures the order of pipeline steps is correct
         self.pipeline_steps = ['imputer', 'encoder', 'standardizer', 'dim_reducer', 'estimator']
         assert set(config.keys()) == set(self.pipeline_steps), "Pipeline steps not correct!"
-        
         self.index = index
         self.config = config
-        self.model = self._instantiate()
+#         self.model = self._instantiate()
         self.cv_error = np.nan
         self.cv_predictions = None
         self.sampled = False
         self.fitted = False
         self.verbose = verbose
 
-    def _instantiate(self):
+    def _instantiate(self, categorical, columns_to_keep):
         """
         Creates a scikit-learn object of the corresponding pipeline.
         """
+        
+        categorical_columns = np.where(categorical)[0]
         pipeline = []
         for step in self.pipeline_steps:
-            alg = self.config[step]['algorithm']
+            alg = self.config[step]['algorithm']            
             if alg is not None:
-                step_object = eval(alg)(**self.config[step]['hyperparameters'])
+                hyperparameters = self.config[step]['hyperparameters']
+                if step == 'encoder' and alg == 'OneHotEncoder':
+                    step_object = ColumnTransformer(
+                        [('one_hot_encoder', OneHotEncoder(**hyperparameters), categorical_columns)], 
+                        remainder='passthrough', sparse_threshold=0)
+                elif step == 'dim_reducer' and alg == 'SelectFromModel':
+                    step_object = eval(alg)(**hyperparameters)
+                else:                    
+                    step_object = eval(alg)(**hyperparameters)
+                    if step == 'imputer' and hyperparameters['strategy'] != 'constant':
+                        categorical = np.array(categorical)[columns_to_keep]
+                        categorical_columns = np.where(categorical)[0]
+#                         categorical_columns = np.array(list(set(categorical_columns).intersection(set(columns_to_keep))))
             else:
                 step_object = None
             
@@ -89,14 +106,17 @@ class PipelineObject:
         pipeline = Pipeline(pipeline)
         return pipeline
 
-    def fit(self, x_train, y_train):
+    def fit(self, x_train, y_train, categorical=None):
         """Fits the pipeline on training data.
 
         Args:
             x_train (np.ndarray):   Features of the training dataset.
             y_train (np.ndarray):   Labels of the training dataset.
         """
-        
+        columns_to_keep = np.where(np.invert(np.all(np.isnan(x_train), axis=0)))[0]
+        if categorical is None:
+            categorical = np.array([False for _ in range(x_train.shape[1])])
+        self.model = self._instantiate(categorical, columns_to_keep)
         self.model.fit(x_train, y_train)
         self.fitted = True
         if self.verbose:
@@ -111,16 +131,16 @@ class PipelineObject:
         Returns:
             np.array: Predicted features of the test dataset.
         """
+        assert self.fitted, "Pipeline not fitted!"
         return self.model.predict(x_test)
 
-    def kfold_fit_validate(self, x_train, y_train, n_folds=5, timeout=1e5, random_state=None):
-        """Performs k-fold cross validation on a training dataset. 
 
+    def kfold_fit_validate(self, x_train, y_train, categorical=None, n_folds=5, timeout=1e5, random_state=None):
+        """Performs k-fold cross validation on a training dataset. 
         Args:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
             n_folds (int):        Number of folds to use for cross validation.
-
         Returns:
             float: Mean of k-fold cross validation error.
             np.ndarray: Predictions on the training dataset from cross validation.
@@ -130,31 +150,35 @@ class PipelineObject:
         if timeout < 1e5:
             if self.verbose:
                 print("having a capped running time of {} seconds".format(timeout))
+        if categorical is None:
+            categorical = np.array([False for _ in x_train.shape[1]])
         y_predicted = np.empty(y_train.shape)
         cv_errors = np.empty(n_folds)
-        kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)        
+        kf = StratifiedKFold(n_folds, shuffle=True, random_state=random_state)
+        
         start = time.time()
         
-        def _kfold_fit_validate():
+#         for pipeline in self.base_learners:            
             
+        def _kfold_fit_validate():            
             for i, (train_idx, test_idx) in enumerate(kf.split(x_train, y_train)):
-                    x_tr = x_train[train_idx, :]
-                    y_tr = y_train[train_idx]
-                    x_te = x_train[test_idx, :]
-                    y_te = y_train[test_idx]
+                x_tr = x_train[train_idx, :]
+                y_tr = y_train[train_idx]
+                x_te = x_train[test_idx, :]
+                y_te = y_train[test_idx]
 
-                    model = self._instantiate()
-                    if len(np.unique(y_tr)) > 1:
-                        model.fit(x_tr, y_tr)
-                        y_predicted[test_idx] = model.predict(x_te)
-                    else:
-                        y_predicted[test_idx] = y_tr[0]
-                    cv_errors[i] = util.error(y_te, y_predicted[test_idx], p_type=self.p_type)
+                columns_to_keep = np.where(np.invert(np.all(np.isnan(x_tr), axis=0)))[0]
+                model = self._instantiate(categorical, columns_to_keep)
+                if len(np.unique(y_tr)) > 1:
+                    model.fit(x_tr, y_tr)
+                    y_predicted[test_idx] = model.predict(x_te)
+                else:
+                    y_predicted[test_idx] = y_tr[0]
+                cv_errors[i] = util.error(y_te, y_predicted[test_idx], p_type=self.p_type) # error metric: BER
 
             self.cv_error = cv_errors.mean()
             self.cv_predictions = y_predicted
-            self.sampled = True
-            
+            self.sampled = True          
 
         class TimeoutException(Exception): pass
 
@@ -262,7 +286,7 @@ class Ensemble(Model):
                 self.base_learners.append(self.candidate_learners[i])
 
 
-    def fit(self, x_train, y_train, runtime_limit=None, fitted_base_learners=None):
+    def fit(self, x_train, y_train, categorical=None, runtime_limit=None, fitted_base_learners=None):
         """Add pipelines to the ensemble and fit the ensemble on training data.
 
         Args:
@@ -277,19 +301,19 @@ class Ensemble(Model):
             if not pipeline.fitted:
                 if self.verbose:
                     print("Fitting a candidate learners not fitted before ..")
-                pipeline.fit(x_train, y_train)        
+                pipeline.fit(x_train, y_train, categorical)        
         self.select_base_learners(y_train, fitted_base_learners)
         # TODO: parallelize training over base learners
         for pipeline in self.base_learners:
             if not pipeline.fitted:
-                pipeline.fit(x_train, y_train)
+                pipeline.fit(x_train, y_train, categorical)
         if self.algorithm == 'stacking':
             self.model.fit(self.second_layer_features, y_train)
         self.fitted = True
         if self.verbose:
             print("Fitted an ensemble with size {}".format(len(self.base_learners)))
 
-    def refit(self, x_train, y_train):
+    def refit(self, x_train, y_train, categorical=None):
         """Fit ensemble model on training data with base learners already added and unchanged.
             
         Args:
@@ -302,7 +326,7 @@ class Ensemble(Model):
         # TODO: parallelize training over base learners
         for pipeline in self.base_learners:
             if not pipeline.fitted:
-                pipeline.fit(x_train, y_train)
+                pipeline.fit(x_train, y_train, categorical)
         if self.algorithm == 'stacking':
             self.model.fit(self.second_layer_features, y_train)
 
@@ -363,7 +387,7 @@ class Ensemble(Model):
         return accuracies
     
     
-    def kfold_fit_validate(self, x_train, y_train, n_folds=5, timeout=1e5, random_state=None):
+    def kfold_fit_validate(self, x_train, y_train, categorical=None, n_folds=5, timeout=1e5, random_state=None):
         """Performs k-fold cross validation on a training dataset. 
 
         Args:
@@ -376,7 +400,6 @@ class Ensemble(Model):
             np.ndarray: Predictions on the training dataset from cross validation.
         """
         timeout = int(max(1, timeout))
-        
         if timeout < 1e5:
             if self.verbose:
                 print("having a capped running time of {} seconds".format(timeout))
@@ -397,7 +420,7 @@ class Ensemble(Model):
                     y_te = y_train[test_idx]
 
                     if len(np.unique(y_tr)) > 1:
-                        self.fit(x_tr, y_tr)
+                        self.fit(x_tr, y_tr, categorical)
                         y_predicted[test_idx] = self.predict(x_te)
                     else:
                         y_predicted[test_idx] = y_tr[0]
