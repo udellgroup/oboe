@@ -22,7 +22,7 @@ The following packages/libraries are required. The versions in brackets are the 
 * re
 * os
 * json
-
+* tensorly
 #### User Installation
 This part is currently under development; an example for code usage is in the `example` folder. The package will be pip installable in the future.
 
