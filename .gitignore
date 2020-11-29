@@ -1,5 +1,5 @@
 .idea/
-automl/__pycache__
+__pycache__
 build
 *PKG-INFO
 *.egg
