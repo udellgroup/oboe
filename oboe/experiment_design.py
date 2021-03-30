@@ -5,7 +5,7 @@ Solves convex optimization problem as described in chapter 7.5 in https://web.st
 
 import numpy as np
 import os
-import linalg
+from . import linalg
 import pandas as pd
 import pickle
 import openml

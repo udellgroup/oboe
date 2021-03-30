@@ -1,8 +1,8 @@
 import numpy as np
-import util
+from . import util
 from scipy.stats import mode
 from sklearn.model_selection import StratifiedKFold, train_test_split
-from model import Model
+from .model import Model
 from sklearn.pipeline import Pipeline
 import time
 
@@ -40,10 +40,7 @@ from sklearn.linear_model import Perceptron
 from sklearn.naive_bayes import GaussianNB as GNB
 from sklearn.neural_network import MLPClassifier as MLP
 
-
 RANDOM_STATE = 0
-
-from model import Model
 
 class Ensemble(Model):
     """An object representing an ensemble of machine learning pipelines.

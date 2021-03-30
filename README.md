@@ -14,24 +14,23 @@ This bundle of systems is still under developement and subjects to change. For a
 
 ## Installation
 
-#### Dependencies with verified versions
-The following libraries are required. The versions in brackets are the versions that are verified to work. Other versions may work, but not guaranteed. 
+The easiest way is to install using pip:
 
-* Python (3.7.3)
+```
+pip install oboe
+```
+
+#### Dependencies with verified versions
+The Oboe systems work on Python 3.7 or later. The following libraries are required. The listed versions are the versions that are verified to work. Older versions may work but are not guaranteed. 
+
 * numpy  (1.16.4)
 * scipy  (1.4.1)
 * pandas (0.24.2)
 * scikit-learn  (0.22.1)
-* multiprocessing (>=0.70.5)
 * tensorly (0.4.4)
 * OpenML (0.9.0)
 * mkl (>=1.0.0)
-* re
-* os
-* json
 
-#### User Installation
-This part is currently under development; an example for code usage is in the `example` folder. The package will be pip installable in the future.
 
 ## Examples
 
@@ -41,16 +40,11 @@ For more detailed examples, please refer to the Jupyter notebooks in the `exampl
 method = 'Oboe' # 'Oboe' or 'TensorOboe'
 problem_type = 'classification'
 
-import numpy as np
-import sys
-automl_path = 'automl' # the path to /oboe/automl
-sys.path.append(automl_path)
+from oboe import AutoLearner, error
 
-from auto_learner import AutoLearner
-import util
+import numpy as np
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 
 data = load_iris()
 x = np.array(data['data'])
@@ -61,8 +55,9 @@ m = AutoLearner(p_type=problem_type, runtime_limit=30, method=method, verbose=Fa
 m.fit(x_train, y_train)
 y_predicted = m.predict(x_test)
 
-print("prediction error (balanced error rate): {}".format(util.error(y_test, y_predicted, 'classification')))    
+print("prediction error (balanced error rate): {}".format(error(y_test, y_predicted, 'classification')))    
 print("selected models: {}".format(m.get_models()))
+
 ```
 
 

@@ -7,7 +7,7 @@ import scipy as sp
 import tensorly as tl
 from scipy.sparse.linalg import svds
 from scipy.linalg import qr
-from util import tucker_on_error_tensor
+from .util import tucker_on_error_tensor
 
 
 def approx_matrix_rank(a, threshold=0.03):

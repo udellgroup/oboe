@@ -3,10 +3,10 @@ Parent class for all ML models.
 """
 
 import numpy as np
-import util
+from .util import error
 from scipy.stats import mode
 from sklearn.model_selection import StratifiedKFold, train_test_split
-from model import Model
+from .model import Model
 from sklearn.pipeline import Pipeline
 import time
 
@@ -169,7 +169,7 @@ class PipelineObject:
                     y_predicted[test_idx] = model.predict(x_te)
                 else:
                     y_predicted[test_idx] = y_tr[0]
-                cv_errors[i] = util.error(y_te, y_predicted[test_idx], p_type=self.p_type)
+                cv_errors[i] = error(y_te, y_predicted[test_idx], p_type=self.p_type)
 
             self.cv_error = cv_errors.mean()
             self.cv_predictions = y_predicted

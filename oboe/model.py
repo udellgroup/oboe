@@ -3,7 +3,7 @@ Parent class for all ML models.
 """
 
 import numpy as np
-import util
+from . import util
 from scipy.stats import mode
 from sklearn.model_selection import StratifiedKFold, train_test_split
 

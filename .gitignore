@@ -1,6 +1,9 @@
 .idea/
 __pycache__
 build
+dist
 *PKG-INFO
 *.egg
-examples/.ipynb_checkpoints/
+*.egg-info
+.egg-info
+.ipynb_checkpoints

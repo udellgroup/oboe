@@ -1,6 +1,4 @@
-import convex_opt
 import json
-import linalg
 import multiprocessing as mp
 import numpy as np
 import scipy as sp
@@ -10,16 +8,20 @@ import pandas as pd
 import pkg_resources
 import time
 import copy
-import util
-from pipeline import PipelineObject
-from model import Model
-from ensemble import Ensemble, Model_collection
-import experiment_design as ED
 from sklearn.model_selection import train_test_split
 import tensorly as tl
 import signal
 from scipy.stats import mode
-from contextlib import contextmanager 
+from contextlib import contextmanager
+
+from . import convex_opt
+from .linalg import pca, approx_matrix_rank, pivot_columns, impute, approx_tensor_rank, impute_with_coefficients
+from .util import extract_columns, check_dataframes, tucker_on_error_tensor, generate_settings, error
+from .pipeline import PipelineObject
+from .model import Model
+from .ensemble import Ensemble, Model_collection
+from . import experiment_design as ED
+ 
     
 class AutoLearner:
     """An object that automatically selects pipelines by greedy D-optimal design.
@@ -104,11 +106,11 @@ class AutoLearner:
 
             # error matrix factorization
             # TODO: determine whether to generate new error matrix or use default/subset of default
-            self.error_matrix = util.extract_columns(ERROR_MATRIX, self.algorithms, self.hyperparameters)
-            self.runtime_matrix = util.extract_columns(RUNTIME_MATRIX, self.algorithms, self.hyperparameters)
-            assert util.check_dataframes(self.error_matrix, self.runtime_matrix)
+            self.error_matrix = extract_columns(ERROR_MATRIX, self.algorithms, self.hyperparameters)
+            self.runtime_matrix = extract_columns(RUNTIME_MATRIX, self.algorithms, self.hyperparameters)
+            assert check_dataframes(self.error_matrix, self.runtime_matrix)
             self.column_headings = np.array([eval(heading) for heading in list(self.error_matrix)])
-            self.X, self.Y, _ = linalg.pca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
+            self.X, self.Y, _ = pca(self.error_matrix.values, rank=min(self.error_matrix.shape)-1)
 
             # sampled & fitted models
             self.new_row = new_row or np.zeros((1, self.error_matrix.shape[1]))
@@ -182,7 +184,7 @@ class AutoLearner:
                 except:
                     print("no files!")
             else:
-                _, _, error_tensor_imputed, _ = util.tucker_on_error_tensor(ERROR_TENSOR, ranks_for_imputation, save_results=False, verbose=self.verbose)
+                _, _, error_tensor_imputed, _ = tucker_on_error_tensor(ERROR_TENSOR, ranks_for_imputation, save_results=False, verbose=self.verbose)
                 if save_imputed_error_tensor:
                     np.save(os.path.join(DEFAULTS, 'tmp', 'error_tensor_imputed.npy'), error_tensor_imputed)
 
@@ -231,7 +233,7 @@ class AutoLearner:
             
             self.training_index = TRAINING_INDEX
 
-            self.pipeline_settings = util.generate_settings(configs_unzipped)
+            self.pipeline_settings = generate_settings(configs_unzipped)
 
              # sampled & fitted models
             self.new_row = new_row or np.full((1, len(self.pipeline_settings)), np.nan)
@@ -256,8 +258,7 @@ class AutoLearner:
             # runtime predictor
             # TODO: let it customizable
             self.runtime_predictor_algorithm = runtime_predictor_algorithm
-            self.runtime_predictor = convex_opt.initialize_runtime_predictor(
-                runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm, load=load_saved_runtime_predictors, save=save_fitted_runtime_predictors, method=self.method, verbose=self.verbose)
+            self.runtime_predictor = convex_opt.initialize_runtime_predictor(runtime_matrix=self.runtime_matrix, runtimes_index=self.training_index, model_name=self.runtime_predictor_algorithm, load=load_saved_runtime_predictors, save=save_fitted_runtime_predictors, method=self.method, verbose=self.verbose)
             self.dataset_ratio_threshold = dataset_ratio_threshold
 
     def _fit(self, x_train, y_train, categorical, t_predicted, ranks=None, runtime_limit=None, remaining_global=None):
@@ -278,7 +279,7 @@ class AutoLearner:
                 print("\nSingle round runtime target: {}".format(runtime_limit))
 
             # set to defaults if not provided
-            rank = ranks or linalg.approx_matrix_rank(self.error_matrix, threshold=0.01)
+            rank = ranks or approx_matrix_rank(self.error_matrix, threshold=0.01)
             runtime_limit = runtime_limit or self.runtime_limit
 
             if self.verbose:
@@ -286,7 +287,7 @@ class AutoLearner:
 
             # cold-start: pick the initial set of models to fit on the new dataset
             if self.selection_method == 'qr':
-                to_sample = linalg.pivot_columns(self.error_matrix)
+                to_sample = pivot_columns(self.error_matrix)
             elif self.selection_method == 'ED':
                 # select algorithms to sample only from subset of algorithms that will run in allocated time
                 valid = np.where(t_predicted <= self.n_cores * runtime_limit/2)[0]
@@ -343,7 +344,7 @@ class AutoLearner:
                     sample_models[i].sampled = True
                     self.new_row[:, to_sample[i]] = cv_error.mean()
                     self.sampled_models[to_sample[i]] = sample_models[i]
-                imputed = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+                imputed = impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
 
                 # impute ALL entries
                 # unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
@@ -394,7 +395,7 @@ class AutoLearner:
                 self.new_row[:, to_fit[i]] = cv_error.mean()
                 self.sampled_models[to_fit[i]] = candidate_models[i]
                 self.ensemble.candidate_learners.append(candidate_models[i])
-            # self.new_row = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+            # self.new_row = impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
 
             if self.verbose:
                 print('\nFitting ensemble of max size {}...'.format(len(self.ensemble.candidate_learners)))
@@ -415,7 +416,7 @@ class AutoLearner:
                 print("\nSingle round runtime target: {}".format(runtime_limit))
 
             # set to defaults if not provided
-            ranks = ranks or linalg.approx_tensor_rank(self.error_tensor_imputed, threshold=0.01)
+            ranks = ranks or approx_tensor_rank(self.error_tensor_imputed, threshold=0.01)
             runtime_limit = runtime_limit or self.runtime_limit
 
 
@@ -497,7 +498,7 @@ class AutoLearner:
                     else:
                         self._t_predicted[to_sample[i]] = max(t_elapsed, self._t_predicted[to_sample[i]])
 
-                self.new_row_pred = linalg.impute_with_coefficients(self.Y[:ranks[0], :], self.new_row, list(self.sampled_indices))
+                self.new_row_pred = impute_with_coefficients(self.Y[:ranks[0], :], self.new_row, list(self.sampled_indices))
 
                 for idx in np.argsort(self.new_row[0, :])[:5]: # np.argsort automatically put nans at the end of the list
                     if not np.isnan(self.new_row[0, idx]):
@@ -572,7 +573,7 @@ class AutoLearner:
                         else:
                             self._t_predicted[to_fit[i]] = max(t_elapsed, self._t_predicted[to_fit[i]])
 
-    #                 self.new_row = linalg.impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
+    #                 self.new_row = impute(self.error_matrix, self.new_row, list(self.sampled_indices), rank=rank)
                     self.ever_once_selected_best = True
 
             if self.verbose:
@@ -621,7 +622,7 @@ class AutoLearner:
                 if self.verbose:
                     print('\nTraining dataset resampled \nShape of resampled training dataset: {} data points, {} features'.format(x_train.shape[0], x_train.shape[1]))
 
-            t_predicted = convex_opt.predict_runtime(x_train.shape, model_name=self.runtime_predictor_algorithm)
+            t_predicted = convex_opt.predict_runtime(x_train.shape, model_name=self.runtime_predictor_algorithm, method=self.method)
 
             # split data into training and validation sets
             try:
@@ -629,7 +630,7 @@ class AutoLearner:
             except ValueError:
                 x_tr, x_va, y_tr, y_va = train_test_split(x_train, y_train, test_size=0.15, random_state=0)
 
-            ranks = [linalg.approx_matrix_rank(self.error_matrix, threshold=0.05)]
+            ranks = [approx_matrix_rank(self.error_matrix, threshold=0.05)]
             if self.build_ensemble:
                 t_init = 2**np.floor(np.log2(np.sort(t_predicted)[:int(1.1*ranks[0])].sum()))
                 t_init = max(1, t_init)
@@ -659,7 +660,7 @@ class AutoLearner:
                     if self.build_ensemble and self.ensemble.fitted:
                         if self.verbose:
                             print("\nGot a new ensemble in the round with rumtime target {} seconds".format(t))
-                        loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+                        loss = error(y_va, self.ensemble.predict(x_va), self.p_type)
 
                         # TEMPORARY: Record intermediate results
 
@@ -760,7 +761,7 @@ class AutoLearner:
 
             start = time.time()
 
-            ranks = [linalg.approx_tensor_rank(self.error_tensor_imputed, threshold=0.05)]
+            ranks = [approx_tensor_rank(self.error_tensor_imputed, threshold=0.05)]
 
 
             t_init = 2**np.floor(np.log2(np.sort(self._t_predicted)[:int(5*ranks[0][-1])].sum()))
@@ -801,7 +802,7 @@ class AutoLearner:
                     if self.build_ensemble and self.ensemble.fitted:
                         if self.verbose:
                             print("\nGot a new ensemble in the round with runtime target {} seconds".format(t))
-    #                     loss = util.error(y_va, self.ensemble.predict(x_va), self.p_type)
+    #                     loss = error(y_va, self.ensemble.predict(x_va), self.p_type)
                         loss = self.ensemble.kfold_fit_validate(x_va, y_va, categorical, n_folds=self.n_folds, timeout=(self.runtime_limit-time.time()+start)/2)[0]
 
                         # TEMPORARY: Record intermediate results

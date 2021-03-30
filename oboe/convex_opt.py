@@ -11,7 +11,10 @@ from sklearn.neighbors import KNeighborsRegressor
 def initialize_runtime_predictor(runtime_matrix, runtimes_index, model_name='LinearRegression', load=True, save=False, method='tensoroboe', verbose=False):
     assert load != save, "Runtime predictor error: must either load previously initialized runtime predictors, or save the initialized runtime predictors at this time!"
     
-    defaults_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'defaults/TensorOboe')
+    if method == 'oboe':
+        defaults_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'defaults/Oboe')
+    elif method == 'tensoroboe':
+        defaults_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'defaults/TensorOboe')
     
     if load:
         if verbose:
