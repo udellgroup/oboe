@@ -2,15 +2,13 @@
 
 This bundle of libraries, Oboe and TensorOboe, are automated machine learning (AutoML) systems that use collaborative filtering to find good models for supervised learning tasks within a user-specified time limit. Further hyperparameter tuning can be performed afterwards.
 
-The name comes from the musical instrument oboe: in an orchestra, oboe plays an initial note which the other instruments use to tune to the right frequency before the performance begins. Our Oboe systems play a similar role in AutoML: we use meta-learning to select a promising set of models or to build an ensemble for a new dataset. Users can either directly use the selected models or further fine-tune their hyperparameters.
-
 On a new dataset:
 
-- Oboe searches for promising estimators (supervised learners) by matrix factorization and classical experiment design. It requires a pre-processed dataset: one-hot encode categorical features and then standardize all features to have zero meanand unit variance. For a complete description, refer to our paper [OBOE: Collaborative Filtering for AutoML Model Selection](https://people.ece.cornell.edu/cy/_papers/oboe.pdf) at KDD 2019.
+- Oboe selects promising estimators (supervised learners). It requires a pre-processed dataset: one-hot encode categorical features and then standardize all features to have zero mean and unit variance. For more technical details, refer to our paper [OBOE: Collaborative Filtering for AutoML Model Selection](https://people.ece.cornell.edu/cy/_papers/oboe.pdf) at KDD 2019.
 
-- TensorOboe searches for promising pipelines, which are directed graphs of learning components here, including imputation, encoding, standardization, dimensionality reduction and estimation. Thus it can accept a raw dataset, possibly with missing entries, different types of features, not-centered features, etc. For a complete description, refer to our paper [AutoML Pipeline Selection: Efficiently Navigating the Combinatorial Space](https://people.ece.cornell.edu/cy/_papers/tensor_oboe.pdf) at KDD 2020.
+- TensorOboe searches for promising pipelines: directed graphs of learning components here, including imputation, encoding, standardization, dimensionality reduction and estimation. It can take a raw dataset as input, possibly with missing entries, different types of features, skewed features, etc. For more technical details, refer to our paper [AutoML Pipeline Selection: Efficiently Navigating the Combinatorial Space](https://people.ece.cornell.edu/cy/_papers/tensor_oboe.pdf) at KDD 2020.
 
-This bundle of systems is still under developement and subjects to change. For any questions, please submit an issue. The authors will respond as soon as possible. 
+This bundle of systems is still under development and subjects to change. Please submit an issue for anything. The authors will respond as soon as possible. 
 
 ## Installation
 
@@ -34,7 +32,7 @@ The Oboe systems work on Python 3.7 or later. The following libraries are requir
 
 ## Examples
 
-For more detailed examples, please refer to the Jupyter notebooks in the `example` folder. A basic classification example:
+For more detailed examples, please refer to the Jupyter notebooks in the `example` folder. A basic classification example on the iris dataset:
 
 ```python
 method = 'Oboe' # 'Oboe' or 'TensorOboe'
@@ -60,6 +58,10 @@ print("selected models: {}".format(m.get_models()))
 
 ```
 
+
+## Misc
+
+The name Oboe comes from the musical instrument oboe: in an orchestra, oboe plays an initial note which the other instruments use to tune to the right frequency before the performance begins. Our Oboe systems play a similar role in AutoML: we use meta-learning to select a promising set of models or to build an ensemble for a new dataset. Users can either directly use the selected models or further fine-tune their hyperparameters.
 
 ## References
 [1] Chengrun Yang, Yuji Akimoto, Dae Won Kim, Madeleine Udell. OBOE: Collaborative filtering for AutoML model selection. KDD 2019.
