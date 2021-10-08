@@ -20,6 +20,15 @@ The easiest way is to install using pip:
 pip install oboe
 ```
 
+Alternatively, if you want to customize the source code, you may install in the editable mode by first `git clone` this respository, and then do
+
+```
+pip install -e .
+```
+
+in the cloned directory.
+
+
 #### Dependencies with verified versions
 The Oboe systems work on Python 3.7 or later. The following libraries are required. The listed versions are the versions that are verified to work. Older versions may work but are not guaranteed. 
 
@@ -37,10 +46,10 @@ The Oboe systems work on Python 3.7 or later. The following libraries are requir
 For more detailed examples, please refer to the Jupyter notebooks in the `example` folder. A basic classification example:
 
 ```python
-method = 'Oboe' # 'Oboe' or 'TensorOboe'
+method = 'Oboe'  # 'Oboe' or 'TensorOboe'
 problem_type = 'classification'
 
-from oboe import AutoLearner, error
+from oboe import AutoLearner, error  # This may take around 15 seconds at first run.
 
 import numpy as np
 from sklearn.datasets import load_iris

@@ -3,6 +3,18 @@ import setuptools
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+def package_files(directory):
+    """
+    Recursively find all files in a (sub)directory.
+    Source: https://stackoverflow.com/a/36693250
+    """
+    paths = []
+    for (path, directories, filenames) in os.walk(directory):
+        for filename in filenames:
+            paths.append(os.path.join('..', path, filename))
+    return paths
+
+
 install_requires = [
     "numpy>=1.16.4",
     "scipy>=1.4.1",
@@ -33,6 +45,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=setuptools.find_packages(),
+    package_data={'': package_files('oboe/defaults')},
     install_requires=install_requires,
     python_requires=">=3.7",
 )
