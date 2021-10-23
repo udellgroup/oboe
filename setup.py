@@ -1,4 +1,5 @@
 import setuptools
+import os
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -20,7 +21,7 @@ install_requires = [
     "scipy>=1.4.1",
     "pandas>=0.24.2",
     "scikit-learn>=0.22.1",
-    "tensorly>=0.4.4",
+    "tensorly==0.6.0",
     "OpenML>=0.9.0",
     "mkl>=1.0.0",
 ],
@@ -28,7 +29,7 @@ install_requires = [
 
 setuptools.setup(
     name="oboe",
-    version="0.0.4",
+    version="0.2.0",
     author="Chengrun Yang, Yuji Akimoto, Dae Won Kim, Madeleine Udell",
     author_email="cy438@cornell.edu",
     description="An AutoML pipeline selection system to quickly select a promising pipeline for a new dataset.",
@@ -44,7 +45,7 @@ setuptools.setup(
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
     ],
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude='large_files'),
     package_data={'': package_files('oboe/defaults')},
     install_requires=install_requires,
     python_requires=">=3.7",

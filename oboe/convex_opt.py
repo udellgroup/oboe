@@ -35,7 +35,7 @@ def initialize_runtime_predictor(runtime_matrix, runtimes_index, model_name='Lin
             sizes_index = []
             sizes = []
         if runtime_matrix is None:
-            runtime_tensor = pd.read_csv(os.path.join(defaults_path, 'runtime_tensor.csv'), index_col=0)
+            runtime_tensor = np.float64(np.load(os.path.join(defaults_path, 'runtime_tensor_f16_compressed.npz'))['a'])
             runtime_matrix = tl.unfold(runtime_tensor, mode=0)
 
         if runtimes_index is None:
@@ -126,8 +126,7 @@ class RuntimePredictor:
         for i in range(self.n_models):
             runtime = runtimes[:, i]
             no_nan_indices = np.where(np.invert(np.isnan(runtime)))[0]
-            runtime_no_nan = runtime[no_nan_indices]
-            
+            runtime_no_nan = runtime[no_nan_indices]            
             
             if self.model_name == 'LinearRegression':
                 sizes_train_poly_no_nan = sizes_train_poly[no_nan_indices]
@@ -143,8 +142,6 @@ class RuntimePredictor:
 
                 neigh = KNeighborsRegressor(n_neighbors=5, metric=metric, weights=weights)
                 self.models[i] = neigh.fit(sizes_train_no_nan, runtime_no_nan)
-#            print(self.models[i].coef_)
-#            print(self.models[i].intercept_)
             # self.models[i] = Lasso().fit(sizes_train_poly, runtime)
 
     def predict(self, size):

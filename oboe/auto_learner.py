@@ -22,7 +22,7 @@ from .model import Model
 from .ensemble import Ensemble, Model_collection
 from . import experiment_design as ED
  
-    
+
 class AutoLearner:
     """An object that automatically selects pipelines by greedy D-optimal design.
 
@@ -37,6 +37,7 @@ class AutoLearner:
         fit_ensemble_despite_timeout (bool): Whether to still fit the ensemble despite a fitting timeout.
         
     Advanced attributes:
+        mode (str):                    The running mode of TensorOboe. 
         new_row (np.ndarray):          Predicted row of matricized error tensor, corresponding to the new dataset. Default None. 
         dataset_ratio_threshold(float):The threshold of dataset ratio (number of points / number of features) for dataset subsampling, if the training set is tall and skinny (number of data points much larger than number of features).
         runtime_predictor_algorithm (str):       
@@ -55,19 +56,65 @@ class AutoLearner:
     """
 
     def __init__(self,
-                 p_type='classification', method='Oboe', algorithms=None, hyperparameters=None, verbose=False,
-                 n_cores=1, n_folds=5, runtime_limit=512, dataset_ratio_threshold=100,
-                 new_row=None, load_defaults=True, customized_defaults_path='',
-                 load_imputed_error_tensor=True, path_to_imputed_error_tensor='default', save_imputed_error_tensor=True, 
+                 p_type='classification', 
+                 method='Oboe',
+                 mode='warm', 
+                 algorithms=None, 
+                 hyperparameters=None, 
+                 verbose=False,
+                 n_cores=1, 
+                 n_folds=5, 
+                 runtime_limit=512, 
+                 dataset_ratio_threshold=100,
+                 new_row=None, 
+                 load_defaults=True, 
+                 customized_defaults_path='',
+                 load_imputed_error_tensor=True, 
+                 original_error_tensor_dir=None,
+                 path_to_imputed_error_tensor='default', 
+                 save_imputed_error_tensor=True, 
                  selection_method='ED', scalarization='D', 
-                 build_ensemble=True, load_saved_latent_factors=True, save_latent_factors=True,
-                 ensemble_method='best_several', ensemble_max_size=5, runtime_predictor_algorithm='LinearRegression',
-                 load_saved_runtime_predictors=True, save_fitted_runtime_predictors=False, random_state=0, 
-                 fit_ensemble_despite_timeout=True, **stacking_hyperparams):
+                 build_ensemble=True, 
+                 load_saved_latent_factors=True, 
+                 save_latent_factors=True,
+                 ensemble_method='best_several', 
+                 ensemble_max_size=5, 
+                 runtime_predictor_algorithm='LinearRegression',
+                 load_saved_runtime_predictors=True, 
+                 save_fitted_runtime_predictors=False, 
+                 random_state=0, 
+                 fit_ensemble_despite_timeout=True, 
+                 **stacking_hyperparams):
         
         method = method.lower()
         assert method in {'oboe', 'tensoroboe'}, "The method must be one of {'Oboe', 'TensorOboe'}."        
         self.method = method
+
+        if method == 'tensoroboe':
+            if mode == 'initialize':  # impute error tensor, compute low rank factors, fit runtime predictors
+                load_imputed_error_tensor=False
+                save_imputed_error_tensor=True
+                load_saved_latent_factors=False
+                load_saved_runtime_predictors=False
+                save_fitted_runtime_predictors=True
+            elif mode == 'impute':  # impute error tensor, compute low rank factors, use fitted runtime predictors
+                load_imputed_error_tensor=False
+                save_imputed_error_tensor=True
+                load_saved_latent_factors=False
+                load_saved_runtime_predictors=True
+                save_fitted_runtime_predictors=False            
+            elif mode == 'factorize':  # used imputed error tensor, compute low rank factors, use fitted runtime predictors
+                load_imputed_error_tensor=True
+                save_imputed_error_tensor=False
+                load_saved_latent_factors=False
+                load_saved_runtime_predictors=True
+                save_fitted_runtime_predictors=False
+            elif mode == 'warm':  # used imputed error tensor, use low rank factors, use fitted runtime predictors
+                load_imputed_error_tensor=True
+                save_imputed_error_tensor=False
+                load_saved_latent_factors=True
+                load_saved_runtime_predictors=True
+                save_fitted_runtime_predictors=False
         
         self.verbose = verbose
         self.random_state = random_state
@@ -146,14 +193,18 @@ class AutoLearner:
                 if self.verbose:
                     print("created a tmp directory in DEFAULTS ...")
 
-    #         ERROR_TENSOR = np.load(os.path.join(DEFAULTS, 'error_tensor.npy'))
-    #         RUNTIME_TENSOR = np.load(os.path.join(DEFAULTS, 'runtime_tensor.npy'))
-            ERROR_TENSOR = np.vstack((np.load(os.path.join(DEFAULTS, 'error_tensor_part_1.npy')), 
-                                      np.load(os.path.join(DEFAULTS, 'error_tensor_part_2.npy'))))
-            if verbose:
-                print("shape of the error tensor: {}".format(ERROR_TENSOR.shape))
-            RUNTIME_TENSOR = np.vstack((np.load(os.path.join(DEFAULTS, 'runtime_tensor_part_1.npy')), 
-                                      np.load(os.path.join(DEFAULTS, 'runtime_tensor_part_2.npy'))))
+            if not load_imputed_error_tensor:
+                assert original_error_tensor_dir != None
+                if self.verbose:
+                    print("loading Float16 not-imputed error tensor ...")
+                    # print("loading original Float64 error tensor ...")
+
+                ERROR_TENSOR = np.float64(np.load(os.path.join(original_error_tensor_dir, 'error_tensor_f16_compressed.npz'))['a'])
+                # ERROR_TENSOR = np.vstack((np.load(os.path.join(original_error_tensor_dir, 'error_tensor_part_1.npy')), 
+                #     np.load(os.path.join(original_error_tensor_dir, 'error_tensor_part_2.npy'))))
+
+            RUNTIME_TENSOR = np.float64(np.load(os.path.join(DEFAULTS, 'runtime_tensor_f16_compressed.npz'))['a'])
+
             with open(os.path.join(DEFAULTS, 'training_index.pkl'), 'rb') as handle:
                 TRAINING_INDEX = pickle.load(handle)
 
@@ -172,21 +223,30 @@ class AutoLearner:
             self.n_folds = n_folds
 
             # error tensor completion
-            ranks_for_imputation = (20, 4, 2, 2, 8, 20)
+            rank_for_imputation = (20, 4, 2, 2, 8, 20)
+            if verbose:
+                print("rank for EM-Tucker imputation: {}".format(rank_for_imputation))
+            rank_tuple = '-'.join([str(item) for item in rank_for_imputation])
             if load_imputed_error_tensor:            
                 try:
                     if path_to_imputed_error_tensor == 'default':
-                        error_tensor_imputed = np.load(os.path.join(DEFAULTS, 'tmp', 'error_tensor_imputed.npy'))
+                        error_tensor_imputed = np.float64(np.load(os.path.join(DEFAULTS, 'error_tensor_imputed_20-4-2-2-8-20_f16_compressed.npz'))['a'])
                     else:
                         if self.verbose:
                             print("loading customized tensor at {} ...".format(path_to_imputed_error_tensor))
                         error_tensor_imputed = np.load(path_to_imputed_error_tensor)
                 except:
-                    print("no files!")
+                    print("Error loading imputed error tensor!")
             else:
-                _, _, error_tensor_imputed, _ = tucker_on_error_tensor(ERROR_TENSOR, ranks_for_imputation, save_results=False, verbose=self.verbose)
+                _, _, error_tensor_imputed, _ = tucker_on_error_tensor(ERROR_TENSOR, rank_for_imputation, save_results=False, verbose=self.verbose)
                 if save_imputed_error_tensor:
-                    np.save(os.path.join(DEFAULTS, 'tmp', 'error_tensor_imputed.npy'), error_tensor_imputed)
+                    imputed_error_tensor_save_path = os.path.join(DEFAULTS, 'tmp', 'error_tensor_imputed_{}.npy'.format(rank_tuple))
+                    np.save(imputed_error_tensor_save_path, error_tensor_imputed)
+                    if self.verbose:
+                        print("saved imputed error tensor to {}".format(imputed_error_tensor_save_path))
+
+            if verbose:
+                print("shape of the error tensor: {}".format(error_tensor_imputed.shape))
 
             self.error_tensor_imputed = error_tensor_imputed
 
@@ -204,6 +264,7 @@ class AutoLearner:
                     Vt_t = np.load(os.path.join(DEFAULTS, 'tmp', 'error_tensor_Vt_t.npy'))
                     factorize_error_tensor = False
                 except:
+                    factorize_error_tensor = True
                     if self.verbose:
                         print("No saved latent factors. Factorizing the error tensor now ...")
             else:
@@ -212,15 +273,15 @@ class AutoLearner:
             if factorize_error_tensor:
                 if self.verbose:
                     print("Factorizing the error matrix to get latent factors ...")
-                core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, ranks=(k_dataset_for_factorization, 4, 2, 2, 8, k_estimator_for_factorization))
+                core_tr, factors_tr = tl.decomposition.tucker(error_tensor_imputed, rank=(k_dataset_for_factorization, 4, 2, 2, 8, k_estimator_for_factorization))
                 pipeline_latent_factors = tl.unfold(tl.tenalg.multi_mode_dot(core_tr, factors_tr[1:], modes=[1, 2, 3, 4, 5]), mode=0)
                 U_t, S_t, Vt_t = sp.linalg.svd(pipeline_latent_factors, full_matrices=False)
                 if save_latent_factors:
-                    if self.verbose:
-                        print("Saving latent factors ...")
                     np.save(os.path.join(DEFAULTS, 'tmp', 'error_tensor_U_t.npy'), U_t)
                     np.save(os.path.join(DEFAULTS, 'tmp', 'error_tensor_S_t.npy'), S_t)
                     np.save(os.path.join(DEFAULTS, 'tmp', 'error_tensor_Vt_t.npy'), Vt_t)
+                    if self.verbose:
+                        print("latent factors saved to {}".format(os.path.join(DEFAULTS, 'tmp')))
             else:
                 if self.verbose:
                     print("Loading latent factors from storage ...")       
@@ -322,7 +383,7 @@ class AutoLearner:
                     return
 
             start = time.time()        
-            if self.selection_method is not 'random':            
+            if self.selection_method != 'random':            
                 # we only need to fit models on the new dataset if it has not been fitted already
                 to_sample = list(set(to_sample) - self.sampled_indices)
                 if self.verbose:
@@ -463,7 +524,7 @@ class AutoLearner:
                     return
 
             start = time.time()       
-            if self.selection_method is not 'random':
+            if self.selection_method != 'random':
                 candidate_indices = []
                 # we only need to fit models on the new dataset if it has not been fitted already
                 to_sample = list(set(to_sample) - self.sampled_indices)
@@ -506,7 +567,7 @@ class AutoLearner:
                             print(self.sampled_pipelines[idx])
                         self.ensemble.candidate_learners.append(self.sampled_pipelines[idx])
 
-                # impute ALL entries
+                # currently disabled: impute ALL entries
                 # unknown = sorted(list(set(range(self.new_row.shape[1])) - self.sampled_indices))
                 # self.new_row[:, unknown] = imputed[:, unknown]
 
@@ -523,9 +584,7 @@ class AutoLearner:
 
         #             self.ensemble.candidate_learners.append(self.sampled_pipelines[best_sampled_idx])
                     for i in np.argsort(self.new_row_pred[0]):
-                        if (first and len(candidate_indices) <= 3) or t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining / 4:                   
-    #                         if self.verbose:
-    #                             print("Adding models predicted to be the best to the ensemble ...")
+                        if (first and len(candidate_indices) <= 3) or t_predicted[i] + t_predicted[candidate_indices].sum() <= remaining / 4:
                             candidate_indices.append(i)
                             # if model has already been k-fold fitted, immediately add to candidate learners
                             if i in self.sampled_indices:
@@ -598,11 +657,9 @@ class AutoLearner:
                     print("Insufficient time in this round.")
 
             
-    def fit(self, x_train, y_train, categorical=None, verbose=False):
+    def fit(self, x_train, y_train, categorical=None):
 
         """Fit an AutoLearner object, iteratively doubling allowed runtime, and terminate when reaching the time limit."""
-        
-        self.verbose = verbose
         
         if self.method == 'oboe':
             num_points, num_features = x_train.shape
@@ -650,7 +707,7 @@ class AutoLearner:
                 k, t = ranks[0], times[0]
                 counter, self.best = 0, 0            
                 while time.time() - start < self.runtime_limit - t:
-                    if verbose:
+                    if self.verbose:
                         print('Fitting with k={}, t={}'.format(k, t))
 #                     if self.build_ensemble:
 #                         self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
@@ -769,7 +826,7 @@ class AutoLearner:
             t_init = max(2**np.floor(np.log2(self.runtime_limit/8)), t_init)
 
             if self.verbose:
-                print("Runtime limit of initial round: {}".format(t_init))
+                print("runtime limit of initial round: {} seconds".format(t_init))
             times = [t_init]
             losses = [0.5]
 
@@ -792,7 +849,7 @@ class AutoLearner:
                 k, t = ranks[0], times[0]
                 counter, self.best = 0, 0            
                 while time.time() - start < self.runtime_limit - t:
-                    if verbose:
+                    if self.verbose:
                         print('Fitting with ranks={}, t={}'.format(k, t))
     #                 if self.build_ensemble:
     #                     self.ensemble = Ensemble(self.p_type, self.ensemble_method, self.stacking_hyperparams)
@@ -806,7 +863,6 @@ class AutoLearner:
                         loss = self.ensemble.kfold_fit_validate(x_va, y_va, categorical, n_folds=self.n_folds, timeout=(self.runtime_limit-time.time()+start)/2)[0]
 
                         # TEMPORARY: Record intermediate results
-
                         e_hat.append(np.copy(self.new_row))
                         e_hat_pred.append(np.copy(self.new_row_pred))
                         actual_times.append(time.time() - start)
@@ -896,11 +952,16 @@ class AutoLearner:
         else: # just select a collection of promising models
             return self.ensemble.predict(x_test) # the self.ensemble object here is a Model_collection
 
+    def _predict_runtime(self, x_train):
+        # predict runtime for the training set of the new dataset.
+        if self.verbose:
+            print("Predicting pipeline running time ..")
+        return convex_opt.predict_runtime(x_train.shape, saved_model='Class', model=self.runtime_predictor)
+
 # The code below is deprecated
     def refit(self, x_train, y_train):
         """Refit an existing AutoLearner object on a new dataset. This will simply retrain the base-learners and
         stacked learner of an existing model, and so algorithm and hyperparameter selection may not be optimal.
-
         Args:
             x_train (np.ndarray): Features of the training dataset.
             y_train (np.ndarray): Labels of the training dataset.
@@ -924,12 +985,6 @@ class AutoLearner:
         Get accuracies of selected pipelines.
         """
         return self.get_pipeline_accuracies(y_test)
-    
-    def _predict_runtime(self, x_train):
-        # predict runtime for the training set of the new dataset.
-        if self.verbose:
-            print("Predicting pipeline running time ..")
-        return convex_opt.predict_runtime(x_train.shape, saved_model='Class', model=self.runtime_predictor)
     
     def _greedy_initial_selection(self, x_train, y_train, t_predicted, runtime_limit):
         if self.verbose:
@@ -971,4 +1026,3 @@ class AutoLearner:
         else:
             if self.verbose:
                 print("Insufficient time to fit fast and on average best-performing pipelines.")
-

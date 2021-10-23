@@ -26,7 +26,9 @@ Alternatively, if you want to customize the source code, you may install in the 
 pip install -e .
 ```
 
-in the cloned directory.
+in the cloned directory. Note this will download some large (about 100MB in total) files to warm-start TensorOboe fitting, so that the setup time (in minutes) can be saved at the cost of disk space and network data usage.
+
+It is recommended to install within an isolated environment (a conda virtual environment, for example) to avoid conflicting dependency versions. 
 
 
 #### Dependencies with verified versions
@@ -36,14 +38,14 @@ The Oboe systems work on Python 3.7 or later. The following libraries are requir
 * scipy  (1.4.1)
 * pandas (0.24.2)
 * scikit-learn  (0.22.1)
-* tensorly (0.4.4)
+* tensorly (0.6.0)
 * OpenML (0.9.0)
 * mkl (>=1.0.0)
 
 
 ## Examples
 
-For more detailed examples, please refer to the Jupyter notebooks in the `example` folder. A basic classification example:
+For more detailed examples, please refer to the Jupyter notebooks in the `example` folder. A basic classification example using Oboe:
 
 ```python
 method = 'Oboe'  # 'Oboe' or 'TensorOboe'
@@ -69,6 +71,11 @@ print("selected models: {}".format(m.get_models()))
 
 ```
 
+## Warm-start meta-training
+
+The `large_files` folder includes some large `numpy` arrays that are intermediate results of previous meta-training. This folder is not included in the `pip` installation, and the files within it can be manually downloaded from this GitHub repository. 
+
+The default functionality in TensorOboe is to skip the step of imputing missing entries in the error tensor, and directly use the pre-imputed error tensor. If users desire to impute the error tensor by themselves, the original non-imputed error tensor can be found at `large_files/error_tensor_f16_compressed.npz`, and the TensorOboe initialization can be done by setting the `original_error_tensor_dir` argument to the path of this `.npz` file, and setting `mode` to `'initialize'` when creating the AutoLearner instance: `m = AutoLearner(..., method='TensorOboe', mode='initialize', path_to_imputed_error_tensor=<path_to_this_npy_file>)`.
 
 ## References
 [1] Chengrun Yang, Yuji Akimoto, Dae Won Kim, Madeleine Udell. OBOE: Collaborative filtering for AutoML model selection. KDD 2019.

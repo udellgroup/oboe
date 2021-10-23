@@ -61,8 +61,7 @@ def get_omega(tensor):
         Ω[index] = 0
     return Ω
 
-def tucker_on_error_tensor(error_tensor, ranks=[15, 4, 2, 2, 8, 15], save_results=False, save_path='', verbose=False):
-    
+def tucker_on_error_tensor(error_tensor, rank=[15, 4, 2, 2, 8, 15], save_results=False, save_path='', verbose=False):
     tensor_pred = np.nan_to_num(error_tensor)
     tensor_from_fac = np.zeros(error_tensor.shape)
     errors = []
@@ -72,18 +71,18 @@ def tucker_on_error_tensor(error_tensor, ranks=[15, 4, 2, 2, 8, 15], save_result
     # while(not stopping_condition(tensor, tensor_from_fac, threshold)):
     while((len(errors) <= 2 or (errors[-2] - errors[-1])/errors[-2] >= 0.0001) and num_iterations <= 1000):
         num_iterations += 1
-        core, factors = tucker(tensor_pred, ranks=ranks)
+        core, factors = tucker(tensor_pred, rank=rank)
         tensor_from_fac = tucker_to_tensor((core, factors))
         error = np.linalg.norm(np.multiply(Ω, np.nan_to_num(error_tensor - tensor_from_fac)))
         
         if verbose:
             if not num_iterations % 5:
-                print("ranks: {}, iteration {}, error: {}".format(ranks, num_iterations, error))
+                print("rank: {}, iteration {}, error: {}".format(rank, num_iterations, error))
 
         errors.append(error)
         tensor_pred = np.nan_to_num(error_tensor) + np.multiply(1-Ω, tensor_from_fac)
     
-    core, factors = tucker(tensor_pred, ranks=ranks)
+    core, factors = tucker(tensor_pred, rank=rank)
     
     if save_results:
         np.save(os.path.join(save_path, 'error_tensor_imputed.npy'), tensor_pred)
